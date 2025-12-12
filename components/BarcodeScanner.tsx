@@ -1,7 +1,9 @@
+
 import React, { useEffect, useState } from 'react';
+import { FoodItem } from '../types';
 
 interface Props {
-  onScanSuccess: (foodData: any) => void;
+  onScanSuccess: (foodData: FoodItem) => void;
   onClose: () => void;
 }
 
@@ -42,15 +44,25 @@ const BarcodeScanner: React.FC<Props> = ({ onScanSuccess, onClose }) => {
 
       if (data.status === 1) {
         const p = data.product;
-        // Normalize Data
-        const foodItem = {
+        
+        // Determine type loosely based on serving size string or category
+        const servingSizeStr = p.serving_size || "";
+        let type: 'solid' | 'liquid' | 'unit' = 'solid';
+        let baseAmount = 100;
+
+        if (servingSizeStr.toLowerCase().includes('ml')) type = 'liquid';
+        
+        // Normalize Data to standard 100g/ml if available in nutriments
+        const foodItem: FoodItem = {
+          id: `scan-${barcode}`,
           name: p.product_name || "Unknown Product",
-          servingSize: p.serving_size || "100g",
+          type: type,
+          base_amount: baseAmount, // OpenFoodFacts nutriments are per 100g usually
           calories: Math.round(p.nutriments?.['energy-kcal_100g'] || 0),
           protein: Math.round(p.nutriments?.proteins_100g || 0),
           carbs: Math.round(p.nutriments?.carbohydrates_100g || 0),
           fats: Math.round(p.nutriments?.fat_100g || 0),
-          brand: p.brands || ""
+          category: "Scanned"
         };
         onScanSuccess(foodItem);
       } else {

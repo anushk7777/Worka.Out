@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { ChatMessage, UserProfile, ProgressEntry, MacroPlan, PersonalizedPlan, DailyMealPlanDB, WorkoutDay } from "../types";
 import { SYSTEM_PROMPT, SUPPLEMENTS_DATA, FOOD_DATABASE } from "../constants";
@@ -10,7 +9,10 @@ const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 const getFoodDBContext = () => {
   return FOOD_DATABASE
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map(f => `- ${f.name} (${f.servingSize}): ${f.calories}kcal, P:${f.protein}g, C:${f.carbs}g, F:${f.fats}g`)
+    .map(f => {
+        const unit = f.type === 'unit' ? 'pcs' : f.type === 'liquid' ? 'ml' : 'g';
+        return `- ${f.name} (${f.base_amount}${unit}): ${f.calories}kcal, P:${f.protein}g, C:${f.carbs}g, F:${f.fats}g`;
+    })
     .join('\n');
 };
 

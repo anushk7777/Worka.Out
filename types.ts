@@ -126,11 +126,13 @@ export interface Supplement {
 export interface FoodItem {
   id: string;
   name: string;
-  servingSize: string;
+  type: 'solid' | 'liquid' | 'unit'; // solid=g, liquid=ml, unit=piece
+  base_amount: number; // Reference amount (usually 100 for g/ml, 1 for unit)
   calories: number;
   protein: number;
   carbs: number;
   fats: number;
+  category?: string;
 }
 
 export interface ChatMessage {

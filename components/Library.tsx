@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { RECIPES, SUPPLEMENTS_DATA, FOOD_DATABASE } from '../constants';
 
@@ -17,7 +18,7 @@ const Library: React.FC = () => {
 
   const filteredRecipes = filterData(RECIPES, ['name', 'tags']);
   const filteredSupplements = filterData(SUPPLEMENTS_DATA, ['name', 'category']);
-  const filteredFoods = filterData(FOOD_DATABASE, ['name']);
+  const filteredFoods = filterData(FOOD_DATABASE, ['name', 'category']);
 
   return (
     <div className="p-4 pb-24 h-full flex flex-col">
@@ -122,18 +123,20 @@ const Library: React.FC = () => {
           <div className="space-y-2">
             <div className="grid grid-cols-12 gap-2 text-xs font-bold text-gray-500 uppercase px-4 mb-2">
               <div className="col-span-5">Food</div>
-              <div className="col-span-2 text-right">Cal</div>
-              <div className="col-span-5 text-right">P / C / F</div>
+              <div className="col-span-3 text-right">Per</div>
+              <div className="col-span-4 text-right">Cal / P</div>
             </div>
             {filteredFoods.map((food) => (
               <div key={food.id} className="bg-secondary p-3 rounded-lg border border-gray-700 grid grid-cols-12 gap-2 items-center">
                 <div className="col-span-5">
                   <div className="font-bold text-white text-sm truncate">{food.name}</div>
-                  <div className="text-xs text-gray-500">{food.servingSize}</div>
+                  <div className="text-[10px] text-gray-500">{food.category}</div>
                 </div>
-                <div className="col-span-2 text-right text-white font-mono">{food.calories}</div>
-                <div className="col-span-5 text-right text-xs font-mono text-gray-400">
-                  <span className="text-blue-400">{food.protein}</span> / <span className="text-green-400">{food.carbs}</span> / <span className="text-yellow-400">{food.fats}</span>
+                <div className="col-span-3 text-right text-xs text-gray-400">
+                    {food.base_amount} {food.type === 'unit' ? 'pc' : food.type === 'liquid' ? 'ml' : 'g'}
+                </div>
+                <div className="col-span-4 text-right text-xs font-mono text-gray-400">
+                  <span className="text-white font-bold">{food.calories}</span> / <span className="text-blue-400">{food.protein}g</span>
                 </div>
               </div>
             ))}
