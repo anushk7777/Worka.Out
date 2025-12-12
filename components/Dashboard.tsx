@@ -1,10 +1,10 @@
 
-// ... (imports remain the same)
+// ... (keep imports)
 import React, { useState, useEffect } from 'react';
 import { UserProfile, MacroPlan, PersonalizedPlan, DailyMealPlanDB, DietMeal, ProgressEntry, WeightPrediction } from '../types';
 import { calculatePlan } from './Calculator';
 import { supabase } from '../services/supabaseClient';
-import { generateDailyMealPlan, handleDietDeviation } from '../services/geminiService';
+import { generateDailyMealPlan, handleDietDeviation, addFoodItem } from '../services/geminiService';
 import { predictWeightTrajectory } from '../services/analyticsService';
 import BarcodeScanner from './BarcodeScanner';
 
@@ -62,6 +62,13 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
   }>({ isOpen: false, type: 'diet', itemIndex: -1, itemData: null });
   const [deviationInput, setDeviationInput] = useState('');
   const [isProcessingDeviation, setIsProcessingDeviation] = useState(false);
+
+  // Add Food Modal State
+  const [addFoodModal, setAddFoodModal] = useState(false);
+  const [addFoodMethod, setAddFoodMethod] = useState<'ai' | 'manual'>('ai');
+  const [addFoodInput, setAddFoodInput] = useState('');
+  const [manualEntry, setManualEntry] = useState({ name: '', cal: '', p: '', c: '', f: '' });
+  const [isAddingFood, setIsAddingFood] = useState(false);
 
   // --- HELPER: SAFE ERROR MESSAGE ---
   const getErrorMessage = (error: any) => {
@@ -129,7 +136,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
       const now = new Date();
       const currentHour = now.getHours();
 
-      // 1. Meal Reminders (Time-based & Plan-based)
       if (todayPlan) {
           const checkMeal = (nameKeywords: string[], startHour: number, endHour: number, label: string) => {
               if (currentHour >= startHour && currentHour < endHour) {
@@ -150,7 +156,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
           checkMeal(['dinner'], 19, 22, 'Dinner');
       }
 
-      // 2. Inactivity Alert (Weight Log)
       if (logs.length > 0) {
           const lastLogDate = new Date(logs[logs.length - 1].created_at || logs[logs.length - 1].date);
           const diffTime = Math.abs(now.getTime() - lastLogDate.getTime());
@@ -175,7 +180,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
           });
       }
 
-      // 3. Aggressive Deficit Warning (Late Night Check)
       if (currentHour >= 20 && todayPlan) {
           const remainingCalories = totalCalTarget - consumed.cal;
           if (remainingCalories > 800) {
@@ -189,9 +193,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
           }
       }
 
-      // 4. Refeed Recommendation (Metabolic Adaptation Check)
       if (recentPlans.length >= 3) {
-          // Check last 3 days
           const last3Days = recentPlans.slice(0, 3);
           const avgIntake = last3Days.reduce((acc, p) => {
               const dayCals = p.meals.reduce((mAcc, m) => m.isCompleted ? mAcc + m.macros.cal : mAcc, 0);
@@ -211,11 +213,10 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
           }
       }
 
-      // 5. Streak Calculation
       let streakCount = 0;
       if (recentPlans.length > 0) {
           for (let i = 0; i < recentPlans.length; i++) {
-             const historicalPlan = recentPlans[i]; // Renamed to avoid shadowing outer 'plan'
+             const historicalPlan = recentPlans[i]; 
              const hasActivity = historicalPlan.meals.some(m => m.isCompleted);
              if (hasActivity) {
                  streakCount++;
@@ -256,7 +257,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
     setLoading(false);
   };
 
-  // --- ACTIONS ---
   const toggleMealCompletion = async (index: number) => {
     if (!todayPlan) return;
     const updatedMeals = [...todayPlan.meals];
@@ -283,13 +283,9 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
 
   const handleScanSuccess = (foodData: any) => {
       setShowScanner(false);
-      setDeviationModal({
-          isOpen: true,
-          type: 'diet',
-          itemIndex: -1, 
-          itemData: { name: "Scanned Item", time: "Now" }
-      });
-      setDeviationInput(`I ate ${foodData.name} which has ${foodData.calories} calories (${foodData.protein}g protein, ${foodData.carbs}g carbs). Add this to my plan.`);
+      setAddFoodMethod('ai');
+      setAddFoodModal(true);
+      setAddFoodInput(`${foodData.name} - ${foodData.calories} calories (${foodData.protein}g protein, ${foodData.carbs}g carbs). 1 Serving.`);
   };
 
   const calculateZigzagTarget = (todayStr: string) => {
@@ -345,7 +341,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
         const historyForAI = recentPlans.filter(p => p.date !== today);
         const { newTarget, contextNote } = calculateZigzagTarget(today);
 
-        // Uses profile preference implicitly if not overridden
         const newPlan = await generateDailyMealPlan(
             profile, plan, today, historyForAI, preferences, dietType, newTarget, contextNote
         );
@@ -417,7 +412,75 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
     }
   };
 
-  // --- RENDER ---
+  const handleSubmitAddFood = async () => {
+    if (!todayPlan) return;
+    setIsAddingFood(true);
+    
+    try {
+        let updatedPlan: DailyMealPlanDB;
+
+        if (addFoodMethod === 'ai') {
+             if (!addFoodInput.trim()) return;
+             updatedPlan = await addFoodItem(todayPlan, addFoodInput);
+        } else {
+             // Manual
+             if (!manualEntry.name || !manualEntry.cal) {
+                 alert("Name and Calories are required.");
+                 setIsAddingFood(false);
+                 return;
+             }
+             
+             const newMeal: DietMeal = {
+                 name: manualEntry.name,
+                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                 items: ['Manual Entry'],
+                 macros: {
+                     p: Number(manualEntry.p) || 0,
+                     c: Number(manualEntry.c) || 0,
+                     f: Number(manualEntry.f) || 0,
+                     cal: Number(manualEntry.cal) || 0
+                 },
+                 isCompleted: true
+             };
+             
+             const newMeals = [...todayPlan.meals, newMeal];
+             const newTotals = {
+                 p: todayPlan.macros.p + newMeal.macros.p,
+                 c: todayPlan.macros.c + newMeal.macros.c,
+                 f: todayPlan.macros.f + newMeal.macros.f,
+                 cal: todayPlan.macros.cal + newMeal.macros.cal
+             };
+             
+             updatedPlan = {
+                 ...todayPlan,
+                 meals: newMeals,
+                 macros: newTotals
+             };
+        }
+        
+        const { error: upsertError } = await supabase
+          .from('daily_meal_plans')
+          .upsert({
+            user_id: userId,
+            date: todayPlan.date,
+            meals: updatedPlan.meals,
+            macros: updatedPlan.macros
+          }, { onConflict: 'user_id, date' });
+
+        if (upsertError) throw upsertError;
+
+        setTodayPlan(updatedPlan);
+        setRecentPlans(prev => [updatedPlan, ...prev.filter(p => p.date !== todayPlan.date)]);
+        setAddFoodModal(false);
+        setAddFoodInput('');
+        setManualEntry({ name: '', cal: '', p: '', c: '', f: '' }); 
+    } catch (err: any) {
+        alert(`Could not add food: ${getErrorMessage(err)}`);
+    } finally {
+        setIsAddingFood(false);
+    }
+  };
+
   return (
     <div className="p-4 space-y-6 pb-28 max-w-2xl mx-auto relative">
       {/* Scanner Modal */}
@@ -427,14 +490,12 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
       <div className="flex justify-between items-center animate-fade-in">
         <div>
           <p className="text-gray-400 text-sm font-medium">{getTimeGreeting()},</p>
-          {/* Changed: Wrapper div has onClick */}
           <div 
             onClick={() => onNavigate('profile')}
             className="flex items-center gap-2 group cursor-pointer active:scale-95 transition-transform origin-left"
           >
             <h1 className="text-3xl font-black text-white tracking-tight group-hover:text-primary transition-colors">{profile.name}</h1>
             
-            {/* Edit Profile Button - Visual Indicator */}
             <button 
                 className="w-6 h-6 rounded-full bg-white/5 group-hover:bg-primary group-hover:text-dark border border-white/10 flex items-center justify-center transition-all text-gray-400"
                 aria-label="Edit Profile"
@@ -450,7 +511,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
             )}
           </div>
         </div>
-        {/* Removed Sign Out Button - moved to Profile */}
         <div className="w-10"></div> 
       </div>
 
@@ -591,7 +651,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
 
                 {(!todayPlan || showRegenInput) && (
                     <div className="glass-card p-1 rounded-2xl mb-4 relative overflow-hidden">
-                        {/* Duplicate Diet Type Toggle Removed - Managed via Profile now */}
                         <div className="p-3 text-center text-gray-400 text-xs italic">
                             Diet Preference: <span className="text-primary font-bold uppercase">{dietType}</span>
                         </div>
@@ -747,6 +806,20 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                                 </button>
                             </div>
                          )}
+
+                         {/* ADD FOOD BUTTON (IN-LIST) */}
+                         <button 
+                             onClick={() => {
+                                 setAddFoodModal(true);
+                                 setAddFoodMethod('ai');
+                             }}
+                             className="w-full py-4 rounded-xl border-2 border-dashed border-white/10 hover:border-primary/50 text-gray-500 hover:text-white transition-all flex items-center justify-center gap-2 group bg-black/20"
+                         >
+                             <div className="w-8 h-8 rounded-full bg-white/5 group-hover:bg-primary group-hover:text-black flex items-center justify-center transition-colors">
+                                 <i className="fas fa-plus text-xs"></i>
+                             </div>
+                             <span className="font-bold text-sm">Add Extra Food / Snack</span>
+                         </button>
                     </div>
                 )}
             </div>
@@ -793,10 +866,10 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
             </div>
         )}
 
-        {/* Overview & Analytics Tab */}
+        {/* Overview & Analytics Tab (Abbreviated to keep file valid, ensuring full logic is retained) */}
         {activeTab === 'overview' && (
              <div className="animate-slide-up space-y-6">
-                 {/* 1. Predictive Analytics Card */}
+                 {/* Predictive Analytics Card */}
                  <div className="glass-card p-6 rounded-2xl border border-primary/20 bg-gradient-to-br from-secondary to-dark relative overflow-hidden">
                     <div className="flex justify-between items-start mb-4">
                         <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -829,7 +902,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                                  </div>
                              </div>
 
-                             {/* SVG Trend Graph */}
+                             {/* SVG Trend Graph Logic maintained */}
                              <div className="h-32 w-full mb-4 relative">
                                 {(() => {
                                     const data = prediction.graphData;
@@ -838,7 +911,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                                     const range = maxW - minW;
                                     const stepX = 100 / (data.length - 1);
                                     
-                                    // Generate points
                                     const points = data.map((d, i) => {
                                         const x = i * stepX;
                                         const y = 100 - ((d.weight - minW) / range) * 100;
@@ -847,29 +919,25 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
 
                                     return (
                                         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
-                                            {/* Grid Lines */}
                                             <line x1="0" y1="25" x2="100" y2="25" stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" />
                                             <line x1="0" y1="50" x2="100" y2="50" stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" />
                                             <line x1="0" y1="75" x2="100" y2="75" stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" />
                                             
-                                            {/* Trend Line */}
                                             <polyline 
                                                 points={points} 
                                                 fill="none" 
                                                 stroke="#FFD700" 
                                                 strokeWidth="2" 
-                                                strokeDasharray="4,1" // Dashed effect for futuristic look
+                                                strokeDasharray="4,1"
                                                 className="drop-shadow-lg"
                                             />
                                             
-                                            {/* Data Points */}
                                             {data.map((d, i) => {
                                                 const x = i * stepX;
                                                 const y = 100 - ((d.weight - minW) / range) * 100;
                                                 return (
                                                     <g key={i}>
                                                         <circle cx={x} cy={y} r={d.isProjection ? "2" : "3"} fill={d.isProjection ? "#fff" : "#FFD700"} opacity={d.isProjection ? 0.5 : 1} />
-                                                        {/* Labels for first, split, last */}
                                                         {(i === 0 || i === data.length - 1 || (!d.isProjection && data[i+1]?.isProjection)) && (
                                                             <text x={x} y={y - 8} fontSize="5" fill="white" textAnchor="middle">{d.weight}</text>
                                                         )}
@@ -891,7 +959,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                     )}
                  </div>
 
-                 {/* 2. Weekly Budget Summary */}
+                 {/* Weekly Budget Summary */}
                  <div className="glass-card p-4 rounded-xl mb-6 border border-primary/20 bg-primary/5">
                     <h3 className="text-primary font-bold mb-3 text-sm uppercase tracking-wider flex items-center gap-2">
                         <i className="fas fa-wallet"></i> Weekly Budget (Checked Meals)
@@ -956,6 +1024,20 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
         )}
       </div>
 
+      {/* FLOATING ACTION BUTTON FOR DIET TAB */}
+      {activeTab === 'diet' && todayPlan && (
+          <button 
+              onClick={() => {
+                  setAddFoodMethod('ai');
+                  setAddFoodModal(true);
+              }}
+              className="fixed bottom-24 right-4 w-12 h-12 bg-primary hover:bg-orange-500 text-black rounded-full shadow-xl shadow-primary/30 flex items-center justify-center z-40 transition-transform active:scale-95 border-2 border-white/20 animate-slide-up"
+          >
+              <i className="fas fa-plus text-lg"></i>
+          </button>
+      )}
+
+      {/* DEVIATION MODAL (Existing logic preserved) */}
       {deviationModal.isOpen && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[70] p-4 backdrop-blur-sm animate-fade-in">
           <div className="glass-card w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl relative border-primary/30">
@@ -973,7 +1055,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                         <i className="fas fa-times"></i>
                     </button>
                 </div>
-
                 <div className="bg-white/5 p-3 rounded-xl mb-4 border border-white/5">
                     <p className="text-[11px] text-gray-300 leading-relaxed">
                         Did you eat something else? Or miss a meal?
@@ -981,7 +1062,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                         <span className="text-primary font-bold">The AI will adjust the rest of your day (Zigzag) to keep you on track.</span>
                     </p>
                 </div>
-
                 <textarea
                     value={deviationInput}
                     onChange={(e) => setDeviationInput(e.target.value)}
@@ -989,7 +1069,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                     className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-primary outline-none h-24 resize-none mb-4"
                     autoFocus
                 />
-
                 <button 
                     onClick={handleSubmitDeviation}
                     disabled={isProcessingDeviation || !deviationInput.trim()}
@@ -1002,6 +1081,115 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                     ) : (
                         <>
                             <i className="fas fa-calculator"></i> Update & Balance
+                        </>
+                    )}
+                </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD FOOD MODAL */}
+      {addFoodModal && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[70] p-4 backdrop-blur-sm animate-fade-in">
+          <div className="glass-card w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl relative border-primary/30">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-orange-600"></div>
+            
+            <div className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                    <div>
+                        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                            <i className="fas fa-plus-circle text-primary"></i> Add Food
+                        </h2>
+                        <p className="text-xs text-gray-400 mt-1">Track extra calories</p>
+                    </div>
+                    <button onClick={() => { setAddFoodModal(false); setAddFoodInput(''); setManualEntry({ name: '', cal: '', p: '', c: '', f: '' }); }} className="text-gray-500 hover:text-white">
+                        <i className="fas fa-times"></i>
+                    </button>
+                </div>
+
+                {/* TABS FOR ADD FOOD */}
+                <div className="flex bg-black/40 p-1 rounded-xl mb-4 border border-white/5">
+                    <button 
+                        onClick={() => setAddFoodMethod('ai')}
+                        className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${addFoodMethod === 'ai' ? 'bg-primary text-black' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        AI Auto-Track
+                    </button>
+                    <button 
+                        onClick={() => setAddFoodMethod('manual')}
+                        className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${addFoodMethod === 'manual' ? 'bg-primary text-black' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        Manual Entry
+                    </button>
+                </div>
+
+                {addFoodMethod === 'ai' ? (
+                    <textarea
+                        value={addFoodInput}
+                        onChange={(e) => setAddFoodInput(e.target.value)}
+                        placeholder="e.g. '1 Banana and a protein shake'..."
+                        className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-primary outline-none h-28 resize-none mb-4"
+                        autoFocus
+                    />
+                ) : (
+                    <div className="space-y-3 mb-4">
+                        <div>
+                             <input 
+                                type="text"
+                                value={manualEntry.name}
+                                onChange={(e) => setManualEntry(prev => ({...prev, name: e.target.value}))}
+                                placeholder="Food Name (e.g. Apple)"
+                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-primary outline-none"
+                             />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                             <input 
+                                type="number"
+                                value={manualEntry.cal}
+                                onChange={(e) => setManualEntry(prev => ({...prev, cal: e.target.value}))}
+                                placeholder="Calories"
+                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-primary outline-none"
+                             />
+                             <input 
+                                type="number"
+                                value={manualEntry.p}
+                                onChange={(e) => setManualEntry(prev => ({...prev, p: e.target.value}))}
+                                placeholder="Protein (g)"
+                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-primary outline-none"
+                             />
+                        </div>
+                         <div className="grid grid-cols-2 gap-3">
+                             <input 
+                                type="number"
+                                value={manualEntry.c}
+                                onChange={(e) => setManualEntry(prev => ({...prev, c: e.target.value}))}
+                                placeholder="Carbs (g)"
+                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-primary outline-none"
+                             />
+                             <input 
+                                type="number"
+                                value={manualEntry.f}
+                                onChange={(e) => setManualEntry(prev => ({...prev, f: e.target.value}))}
+                                placeholder="Fat (g)"
+                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-primary outline-none"
+                             />
+                        </div>
+                    </div>
+                )}
+
+                <button 
+                    onClick={handleSubmitAddFood}
+                    disabled={isAddingFood || (addFoodMethod === 'ai' ? !addFoodInput.trim() : (!manualEntry.name || !manualEntry.cal))}
+                    className="w-full bg-white text-black hover:bg-gray-200 font-bold py-3 rounded-xl transition-all shadow-lg flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {isAddingFood ? (
+                        <>
+                            <i className="fas fa-circle-notch fa-spin"></i> Processing...
+                        </>
+                    ) : (
+                        <>
+                            <i className="fas fa-check"></i> Add to Log
                         </>
                     )}
                 </button>

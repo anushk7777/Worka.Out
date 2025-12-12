@@ -13,12 +13,11 @@ interface Props {
 const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut }) => {
   const [formData, setFormData] = useState<UserProfile>({
       ...profile,
-      dietary_preference: profile.dietary_preference || 'non-veg' // Default fallback
+      dietary_preference: profile.dietary_preference || 'non-veg'
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
-  // Sync state with props if they change
   useEffect(() => {
     setFormData({
         ...profile,
@@ -43,7 +42,6 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No user found");
 
-      // Recalculate macros based on new goal/activity
       const newMacros = calculatePlan(formData);
 
       const updates = {
@@ -57,7 +55,6 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
         dietary_preference: formData.dietary_preference,
         daily_calories: newMacros.calories,
         weekly_calories: newMacros.calories * 7
-        // updated_at removed to prevent errors if column missing in old DBs
       };
 
       const { error } = await supabase
@@ -67,7 +64,6 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
 
       if (error) throw error;
 
-      // Update parent state
       onUpdateProfile({ 
         ...formData, 
         daily_calories: newMacros.calories,
@@ -81,8 +77,7 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
 
     } catch (err: any) {
       console.error(err);
-      // Safe Error Extraction
-      const errorMsg = typeof err === 'string' ? err : (err?.message || 'An unexpected error occurred. Check DB permissions.');
+      const errorMsg = typeof err === 'string' ? err : (err?.message || 'An unexpected error occurred.');
       setMessage({ 
         text: `Failed to update profile: ${errorMsg}`, 
         type: 'error' 
@@ -92,118 +87,207 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
     }
   };
 
+  // --- UI HELPERS ---
+  const goals = Object.values(Goal);
+  const currentGoalIndex = goals.indexOf(formData.goal);
+
+  const diets = ['veg', 'egg', 'non-veg'] as const;
+  const currentDietIndex = diets.indexOf(formData.dietary_preference as any);
+
+  const parseActivity = (fullString: string) => {
+    const parts = fullString.split(' (');
+    return {
+      title: parts[0],
+      desc: parts[1] ? parts[1].replace(')', '') : ''
+    };
+  };
+
   return (
-    <div className="p-4 pb-28 space-y-6">
-      <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Profile & Settings</h2>
+    <div className="p-4 pb-32 space-y-8">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-black text-white tracking-tight">Settings</h2>
+            <p className="text-xs text-gray-400 font-medium">Customize your plan</p>
+          </div>
           <button 
             onClick={onSignOut}
-            className="text-xs text-red-400 border border-red-500/30 bg-red-500/10 px-3 py-1.5 rounded-lg hover:bg-red-500/20 transition-colors"
+            className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all active:scale-95"
           >
-            <i className="fas fa-sign-out-alt mr-1"></i> Sign Out
+            <i className="fas fa-power-off"></i>
           </button>
       </div>
 
-      {/* Hero Stats */}
-      <div className="glass-card p-6 rounded-2xl flex items-center justify-between relative overflow-hidden">
-         <div className="absolute -right-4 -top-4 w-24 h-24 bg-primary/10 rounded-full blur-2xl"></div>
-         <div>
-            <h3 className="text-xl font-bold text-white">{formData.name}</h3>
-            <div className="flex gap-4 mt-2 text-sm text-gray-400">
-                <span>{formData.age} yrs</span>
-                <span>{formData.height} cm</span>
-                <span>{formData.weight} kg</span>
+      {/* Hero Stats Card */}
+      <div className="relative rounded-3xl p-6 overflow-hidden border border-white/10 group">
+         {/* Dynamic Background */}
+         <div className="absolute inset-0 bg-gradient-to-br from-secondary via-dark to-black z-0"></div>
+         <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-[60px] group-hover:bg-primary/30 transition-all duration-700"></div>
+         
+         <div className="relative z-10 flex items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-gray-800 to-gray-700 flex items-center justify-center shadow-lg border border-white/10 text-2xl">
+                {formData.gender === 'Male' ? '👨' : '👩'}
             </div>
-         </div>
-         <div className="text-right z-10">
-             <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">BMI</div>
-             <div className="text-2xl font-black text-primary">{bmi}</div>
+            <div className="flex-1">
+                <h3 className="text-2xl font-bold text-white leading-none mb-1">{formData.name}</h3>
+                <div className="flex gap-3 text-xs font-medium text-gray-400">
+                    <span className="bg-black/30 px-2 py-1 rounded-md">{formData.age} yrs</span>
+                    <span className="bg-black/30 px-2 py-1 rounded-md">{formData.height} cm</span>
+                    <span className="bg-black/30 px-2 py-1 rounded-md">{formData.weight} kg</span>
+                </div>
+            </div>
+            <div className="text-right">
+                 <div className="text-[10px] text-primary font-bold uppercase tracking-wider mb-0.5">BMI</div>
+                 <div className="text-3xl font-black text-white leading-none">{bmi}</div>
+            </div>
          </div>
       </div>
 
-      <div className="space-y-6 animate-slide-up">
+      <div className="space-y-8 animate-slide-up">
           
-          {/* Goal Setting */}
-          <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-300 uppercase tracking-wide flex items-center gap-2">
-                  <i className="fas fa-bullseye text-primary"></i> Fitness Goal
+          {/* GOAL SLIDER */}
+          <div className="space-y-3">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+                  <i className="fas fa-crosshairs text-primary"></i> Current Goal
               </label>
-              <div className="bg-secondary p-1 rounded-xl border border-gray-700">
-                  {Object.values(Goal).map((g) => (
+              
+              <div className="relative bg-black/40 backdrop-blur-md rounded-2xl p-1.5 flex justify-between items-center border border-white/5 h-14 select-none">
+                  {/* Sliding Pill */}
+                  <div 
+                    className="absolute top-1.5 bottom-1.5 bg-gradient-to-r from-primary to-yellow-500 rounded-xl shadow-lg shadow-primary/20 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]"
+                    style={{
+                        left: `${(currentGoalIndex / goals.length) * 100}%`,
+                        width: `${100 / goals.length}%`,
+                        marginLeft: '0.2%' // Tiny adjustment for gap
+                    }}
+                  ></div>
+
+                  {goals.map((g) => (
                       <button
                           key={g}
                           onClick={() => handleChange('goal', g)}
-                          className={`w-full text-left px-4 py-3 rounded-lg text-sm transition-all mb-1 last:mb-0 ${
-                              formData.goal === g 
-                              ? 'bg-primary text-black font-bold shadow-lg' 
-                              : 'text-gray-400 hover:bg-white/5'
+                          className={`flex-1 relative z-10 h-full text-[11px] font-bold uppercase tracking-wide transition-colors duration-300 flex items-center justify-center ${
+                              formData.goal === g ? 'text-black' : 'text-gray-500 hover:text-gray-300'
                           }`}
                       >
-                          {g}
+                          {g === 'Fat Loss' && <i className="fas fa-fire mr-1.5"></i>}
+                          {g === 'Muscle Gain' && <i className="fas fa-dumbbell mr-1.5"></i>}
+                          {g === 'Maintenance / Recomp' && <i className="fas fa-balance-scale mr-1.5"></i>}
+                          {g === 'Maintenance / Recomp' ? 'Recomp' : g}
                       </button>
                   ))}
               </div>
           </div>
 
-          {/* Diet Preference */}
-          <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-300 uppercase tracking-wide flex items-center gap-2">
+          {/* DIET PREFERENCE SLIDER */}
+          <div className="space-y-3">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1 flex items-center gap-2">
                   <i className="fas fa-utensils text-green-400"></i> Diet Preference
               </label>
-              <div className="grid grid-cols-3 gap-2">
-                  {(['veg', 'egg', 'non-veg'] as const).map((type) => (
+              
+              <div className="relative bg-black/40 backdrop-blur-md rounded-2xl p-1.5 flex justify-between items-center border border-white/5 h-16 select-none">
+                  {/* Sliding Pill */}
+                  <div 
+                    className={`absolute top-1.5 bottom-1.5 rounded-xl shadow-lg transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                        formData.dietary_preference === 'veg' ? 'bg-green-500 shadow-green-500/20' : 
+                        formData.dietary_preference === 'egg' ? 'bg-yellow-500 shadow-yellow-500/20' : 
+                        'bg-red-500 shadow-red-500/20'
+                    }`}
+                    style={{
+                        left: `${(currentDietIndex / diets.length) * 100}%`,
+                        width: `${100 / diets.length}%`,
+                         marginLeft: '0.2%'
+                    }}
+                  ></div>
+
+                  {diets.map((type) => (
                       <button
                           key={type}
                           onClick={() => handleChange('dietary_preference', type)}
-                          className={`py-3 rounded-xl border transition-all flex flex-col items-center gap-1 ${
-                              formData.dietary_preference === type 
-                              ? type === 'veg' ? 'bg-green-500 text-white border-green-500' 
-                              : type === 'egg' ? 'bg-yellow-500 text-black border-yellow-500'
-                              : 'bg-red-500 text-white border-red-500'
-                              : 'bg-dark border-gray-700 text-gray-500 hover:border-gray-500'
+                          className={`flex-1 relative z-10 h-full flex flex-col items-center justify-center transition-colors duration-300 ${
+                              formData.dietary_preference === type ? 'text-white' : 'text-gray-500 hover:text-gray-300'
                           }`}
                       >
-                          <i className={`fas ${type === 'veg' ? 'fa-leaf' : type === 'egg' ? 'fa-egg' : 'fa-drumstick-bite'} text-lg`}></i>
-                          <span className="text-[10px] font-bold uppercase">{type}</span>
+                          <i className={`fas ${type === 'veg' ? 'fa-leaf' : type === 'egg' ? 'fa-egg' : 'fa-drumstick-bite'} text-lg mb-0.5 ${formData.dietary_preference === type ? 'scale-110' : ''} transition-transform`}></i>
+                          <span className="text-[9px] font-bold uppercase">{type}</span>
                       </button>
                   ))}
               </div>
-              <p className="text-[10px] text-gray-500 italic px-1">
-                  *Changing this will not affect today's meal plan. The AI will adapt starting tomorrow.
-              </p>
+              <p className="text-[10px] text-gray-500 text-center">*Updates apply to tomorrow's plan</p>
           </div>
 
-          {/* Activity Level */}
-          <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-300 uppercase tracking-wide flex items-center gap-2">
+          {/* ACTIVITY LEVEL CARDS */}
+          <div className="space-y-3">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1 flex items-center gap-2">
                   <i className="fas fa-running text-blue-400"></i> Activity Level
               </label>
-              <select 
-                  value={formData.activityLevel}
-                  onChange={(e) => handleChange('activityLevel', e.target.value)}
-                  className="w-full bg-secondary border border-gray-700 rounded-xl p-3 text-sm text-white focus:border-primary outline-none truncate"
-              >
-                  {Object.values(ActivityLevel).map(level => (
-                      <option key={level} value={level} className="truncate">{level}</option>
-                  ))}
-              </select>
+              <div className="space-y-2">
+                  {Object.values(ActivityLevel).map(level => {
+                      const { title, desc } = parseActivity(level);
+                      const isSelected = formData.activityLevel === level;
+                      
+                      return (
+                        <button
+                          key={level}
+                          onClick={() => handleChange('activityLevel', level)}
+                          className={`w-full text-left p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden group ${
+                             isSelected 
+                               ? 'bg-blue-600/10 border-blue-500/50 shadow-[0_0_20px_rgba(37,99,235,0.15)]' 
+                               : 'bg-black/20 border-white/5 hover:bg-white/5 hover:border-white/10'
+                          }`}
+                        >
+                             <div className="flex justify-between items-center relative z-10">
+                                <div>
+                                    <div className={`font-bold text-sm mb-1 ${isSelected ? 'text-blue-400' : 'text-gray-300'}`}>
+                                        {title}
+                                    </div>
+                                    <div className="text-[11px] text-gray-500 font-medium">
+                                        {desc}
+                                    </div>
+                                </div>
+                                {isSelected && (
+                                    <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center shadow-lg animate-fade-in">
+                                        <i className="fas fa-check text-white text-xs"></i>
+                                    </div>
+                                )}
+                             </div>
+                             {/* Fill Effect */}
+                             {isSelected && <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-transparent"></div>}
+                        </button>
+                      );
+                  })}
+              </div>
           </div>
 
-          {/* Save Button */}
-          <button 
-              onClick={handleSave}
-              disabled={loading}
-              className="w-full bg-white text-black font-bold py-4 rounded-xl shadow-lg shadow-white/10 hover:bg-gray-200 transition-all active:scale-95 disabled:opacity-50"
-          >
-              {loading ? <i className="fas fa-circle-notch fa-spin"></i> : "Save Profile Changes"}
-          </button>
+          {/* Save Button Container */}
+          <div className="pt-4 sticky bottom-6 z-20">
+              <button 
+                  onClick={handleSave}
+                  disabled={loading}
+                  className="w-full bg-white text-black font-black py-4 rounded-2xl shadow-2xl shadow-white/10 hover:bg-gray-200 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 text-sm uppercase tracking-wider relative overflow-hidden"
+              >
+                  {loading ? (
+                       <i className="fas fa-circle-notch fa-spin"></i>
+                  ) : (
+                       <>
+                         <span className="relative z-10">Save & Update Plan</span>
+                         <i className="fas fa-arrow-right relative z-10"></i>
+                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-200/50 to-transparent translate-x-[-100%] animate-[shimmer_2s_infinite]"></div>
+                       </>
+                  )}
+              </button>
+          </div>
 
           {message && (
-              <div className={`p-4 rounded-xl border text-sm flex items-start gap-3 animate-fade-in ${
+              <div className={`p-4 rounded-2xl border text-sm flex items-start gap-3 animate-slide-up ${
                   message.type === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-200' : 'bg-red-500/10 border-red-500/30 text-red-200'
               }`}>
-                  <i className={`fas ${message.type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle'} mt-0.5`}></i>
-                  <p>{message.text}</p>
+                  <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                       message.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+                  }`}>
+                      <i className={`fas ${message.type === 'success' ? 'fa-check' : 'fa-exclamation'} text-[10px]`}></i>
+                  </div>
+                  <p className="leading-tight">{message.text}</p>
               </div>
           )}
       </div>

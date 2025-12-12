@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { ChatMessage, UserProfile, ProgressEntry, MacroPlan, PersonalizedPlan, DailyMealPlanDB, WorkoutDay } from "../types";
 import { SYSTEM_PROMPT, SUPPLEMENTS_DATA, FOOD_DATABASE } from "../constants";
@@ -468,5 +469,92 @@ export const handleDietDeviation = async (
     } catch (e: any) {
         console.error("Deviation adjustment failed", e);
         throw new Error(`Deviation adjustment failed: ${e.message}`);
+    }
+};
+
+// NEW: Add Extra Food Item Function
+export const addFoodItem = async (
+    currentPlan: DailyMealPlanDB,
+    userDescription: string
+): Promise<DailyMealPlanDB> => {
+    if (!apiKey) throw new Error("API Key missing.");
+
+    const prompt = `
+    TASK: ADD EXTRA FOOD ITEM TO PLAN (TRACKING)
+    
+    Current Plan Date: ${currentPlan.date}
+    User Request: Add "${userDescription}" to the daily log.
+    
+    ACTION REQUIRED:
+    1. ANALYZE the food description and ESTIMATE macros (Calories, Protein, Carbs, Fats) accurately.
+    2. APPEND a new meal object to the 'meals' array.
+       - Name: "Extra / Snack" (or specific name like "Evening Snack" if inferred).
+       - Time: Current Time (use "Now" or infer from context).
+       - isCompleted: true (Mark as tracked immediately).
+    3. RE-CALCULATE 'daily_totals' to include this new item.
+    
+    CURRENT JSON:
+    ${JSON.stringify(currentPlan)}
+    
+    OUTPUT: Full updated JSON object with the same structure.
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-3-pro-preview", 
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            config: { 
+                thinkingConfig: { thinkingBudget: 32768 }, 
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        meals: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    name: { type: Type.STRING },
+                                    time: { type: Type.STRING },
+                                    items: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    isCompleted: { type: Type.BOOLEAN },
+                                    macros: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            p: { type: Type.NUMBER },
+                                            c: { type: Type.NUMBER },
+                                            f: { type: Type.NUMBER },
+                                            cal: { type: Type.NUMBER }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        daily_totals: {
+                             type: Type.OBJECT,
+                             properties: {
+                                 p: { type: Type.NUMBER },
+                                 c: { type: Type.NUMBER },
+                                 f: { type: Type.NUMBER },
+                                 cal: { type: Type.NUMBER }
+                             }
+                        }
+                    }
+                }
+            } 
+        });
+
+        const text = cleanJson(response.text || "{}");
+        const data = JSON.parse(text);
+        
+        return {
+            ...currentPlan,
+            meals: data.meals,
+            macros: data.daily_totals
+        };
+
+    } catch (e: any) {
+        console.error("Add food failed", e);
+        throw new Error(`Failed to add food: ${e.message}`);
     }
 };
