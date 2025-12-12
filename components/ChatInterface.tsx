@@ -44,13 +44,14 @@ const ChatInterface: React.FC<Props> = ({ userProfile, progressLogs, onClose }) 
     setLoading(true);
 
     try {
-      const responseText = await generateTrainerResponse(messages, userProfile, progressLogs, userMsg.text);
+      const { text: responseText, sources } = await generateTrainerResponse(messages, userProfile, progressLogs, userMsg.text);
       
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'model',
         text: responseText,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        sources: sources
       };
       
       setMessages(prev => [...prev, aiMsg]);
@@ -68,10 +69,7 @@ const ChatInterface: React.FC<Props> = ({ userProfile, progressLogs, onClose }) 
         <h2 className="text-lg font-bold text-white flex items-center">
           <i className="fas fa-robot mr-2 text-primary"></i> Master Trainer AI
         </h2>
-        <button 
-            onClick={onClose} 
-            className="text-gray-400 hover:text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
-        >
+        <button onClick={onClose} className="text-gray-400 hover:text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors">
             <i className="fas fa-times"></i>
         </button>
       </div>
@@ -93,6 +91,29 @@ const ChatInterface: React.FC<Props> = ({ userProfile, progressLogs, onClose }) 
               {msg.text.split('\n').map((line, i) => (
                 <p key={i} className="mb-1">{line}</p>
               ))}
+
+              {/* Citations / Sources Display */}
+              {msg.sources && msg.sources.length > 0 && (
+                <div className="mt-3 pt-2 border-t border-white/10">
+                    <p className="text-[10px] text-gray-400 mb-1.5 uppercase font-bold tracking-wider flex items-center gap-1">
+                        <i className="fas fa-search text-xs"></i> Sources
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                        {msg.sources.map((source, idx) => (
+                            <a 
+                                key={idx} 
+                                href={source.uri} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-[10px] bg-black/20 hover:bg-black/40 text-blue-300 px-2 py-1 rounded border border-white/10 truncate max-w-[200px] flex items-center gap-1 transition-colors"
+                            >
+                                <i className="fas fa-external-link-alt text-[9px] opacity-70"></i>
+                                {source.title}
+                            </a>
+                        ))}
+                    </div>
+                </div>
+              )}
             </div>
           </div>
         ))}

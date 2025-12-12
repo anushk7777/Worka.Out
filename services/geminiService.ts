@@ -25,14 +25,14 @@ const cleanJson = (text: string): string => {
     return cleaned;
 };
 
-// ... existing generateTrainerResponse ...
+// Updated: Uses Google Search Grounding with Flash for speed
 export const generateTrainerResponse = async (
   history: ChatMessage[], 
   userProfile: UserProfile | null,
   progressLogs: ProgressEntry[],
   newMessage: string
-): Promise<string> => {
-  if (!apiKey) return "Configuration Error: API Key is missing. Please restart the app.";
+): Promise<{ text: string, sources?: { title: string, uri: string }[] }> => {
+  if (!apiKey) return { text: "Configuration Error: API Key is missing. Please restart the app." };
 
   try {
     const model = "gemini-2.5-flash";
@@ -55,17 +55,29 @@ export const generateTrainerResponse = async (
     const response = await ai.models.generateContent({
       model: model,
       contents: contents,
-      config: { temperature: 0.7, maxOutputTokens: 1024 }
+      config: { 
+        tools: [{ googleSearch: {} }],
+        temperature: 0.7
+      }
     });
 
-    return response.text || "I apologize, I'm having trouble analyzing your progress right now.";
+    // Extract sources if available
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks
+      ?.map((chunk: any) => chunk.web)
+      .filter((web: any) => web)
+      .map((web: any) => ({ title: web.title, uri: web.uri }));
+
+    return { 
+      text: response.text || "I apologize, I'm having trouble analyzing your progress right now.",
+      sources: sources
+    };
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "I'm experiencing connectivity issues.";
+    return { text: "I'm experiencing connectivity issues." };
   }
 };
 
-// ... updated analyzeBodyComposition for Dual Scan ...
+// Updated: Uses Gemini 3 Pro Preview with Thinking for deep visual analysis
 export const analyzeBodyComposition = async (
   frontImageBase64: string, 
   backImageBase64: string | null,
@@ -138,7 +150,7 @@ export const analyzeBodyComposition = async (
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash", 
+      model: "gemini-3-pro-preview", 
       contents: [
         {
           role: "user",
@@ -146,6 +158,7 @@ export const analyzeBodyComposition = async (
         }
       ],
       config: { 
+        thinkingConfig: { thinkingBudget: 32768 },
         responseMimeType: "application/json",
         responseSchema: {
             type: Type.OBJECT,
@@ -164,7 +177,7 @@ export const analyzeBodyComposition = async (
   }
 };
 
-// ... existing generateWorkoutSplit ...
+// Updated: Uses Gemini 3 Pro Preview with Thinking for complex workout logic
 export const generateWorkoutSplit = async (profile: UserProfile): Promise<WorkoutDay[]> => {
     if (!apiKey) throw new Error("API Key missing");
     const prompt = `
@@ -177,9 +190,10 @@ export const generateWorkoutSplit = async (profile: UserProfile): Promise<Workou
     
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-pro-preview",
             contents: [{ role: "user", parts: [{ text: prompt }] }],
             config: { 
+                thinkingConfig: { thinkingBudget: 32768 },
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
@@ -220,6 +234,7 @@ export const generateWorkoutSplit = async (profile: UserProfile): Promise<Workou
 };
 
 // --- REVISED: DAILY MEAL PLAN WITH STRICT ZIGZAG TARGETING ---
+// Updated to use Gemini 3 Pro with Thinking for better calorie math and menu planning
 export const generateDailyMealPlan = async (
     profile: UserProfile, 
     macros: MacroPlan, 
@@ -227,7 +242,6 @@ export const generateDailyMealPlan = async (
     history: DailyMealPlanDB[] = [],
     preferences?: string,
     dietType: 'veg' | 'egg' | 'non-veg' = 'non-veg',
-    // New parameters for Zigzag logic
     customCalorieTarget?: number,
     weeklyStatusNote?: string
 ): Promise<DailyMealPlanDB> => {
@@ -238,10 +252,6 @@ export const generateDailyMealPlan = async (
     
     // Determine the actual target for today
     const effectiveCalories = customCalorieTarget || macros.calories;
-    
-    // Adjust macros roughly based on new calories (keeping protein high)
-    // Protein: fixed grams usually, but if calories drop too low, we might scale slightly.
-    // For simplicity, we'll ask AI to fit the new calorie target.
     
     // Prepare History Context (Last 3 days for relevance)
     const recentHistory = history.slice(0, 3).map(plan => {
@@ -271,9 +281,6 @@ export const generateDailyMealPlan = async (
       INSTRUCTION: This target (${effectiveCalories} kcal) has been adjusted to AVERAGE OUT deviations from the rest of the week.
       YOU MUST GENERATE A PLAN THAT HITS THIS TARGET (+/- 50kcal). 
       
-      If the Target is LOWER than original: This is a debt repayment day. Focus on Volume Eating (high fiber, low calorie density, salads, clear soups).
-      If the Target is HIGHER than original: This is a refeed day.
-      
       DIET MODE: ${dietType.toUpperCase()}
       ${dietRule}
       
@@ -285,35 +292,13 @@ export const generateDailyMealPlan = async (
       HISTORY (Last 3 Days):
       ${recentHistory || "No history available (New Client)"}
 
-      1. PROTEIN CONSISTENCY (The Anchor):
-         - Identify staple protein sources from history (e.g., Chicken Breast, Paneer, Eggs).
-         - REPEAT these protein sources if they worked well. Consistency is key for muscle building/fat loss.
-         - Goal: 60-70% consistency in core protein items.
+      1. PROTEIN CONSISTENCY: Goal 60-70% consistency in core protein items (Chicken Breast, Paneer, etc).
+      2. CARB/FAT VARIETY: Rotate carb sources (Rice vs Roti) and cooking styles.
+      3. OVERALL REPETITION: Aim for ~40-50% repetition of total ingredients.
 
-      2. CARB/FAT VARIETY (The Spice):
-         - ROTATE carbohydrate sources. If they had Rice yesterday, suggest Roti, Quinoa, or Oats today.
-         - ROTATE cooking styles. If they had "Boiled Egg" yesterday, make "Egg Bhurji" today.
-         - Goal: Prevent monotony by changing textures and flavors of side dishes/carbs.
-
-      3. OVERALL REPETITION TARGET:
-         - Aim for ~40-50% repetition of total ingredients. This makes the diet easy to shop for but not boring to eat.
-         - DO NOT create a completely wild, new menu every day. Build on previous days.
-
-      ---------------------------------------------------------
-      *** INTELLIGENT ADJUSTMENT PROTOCOL (CRITICAL) ***
-      ${isEditMode ? `
-      The user is asking for a CORRECTION or has reported food consumption (e.g. "I ate 500g Biryani").
-      1. IDENTIFY what they ate and ESTIMATE its macros (be generous with calorie estimation for restaurant food).
-      2. DEDUCT these macros from the TODAY'S STRICT TARGET.
-      3. RE-PLAN the REMAINING meals to fit the NEW REMAINING BUDGET.
-      ` : `
-      Generate a balanced Indian diet plan strictly adhering to ${effectiveCalories} kcal.
-      `}
-      
       *** UNIT POLICE (ZERO TOLERANCE) ***
       1. YOU MUST USE GRAMS (g) FOR SOLIDS.
       2. YOU MUST USE MILLILITERS (ml) FOR LIQUIDS.
-      3. BANNED WORDS: "Cup", "Bowl", "Slice", "Ounce", "oz", "lb", "Tablespoon" (unless followed by exact grams).
       ---------------------------------------------------------
 
       FOOD DATABASE (Use these items primarily):
@@ -335,10 +320,10 @@ export const generateDailyMealPlan = async (
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-pro-preview", // Upgraded for complex reasoning
             contents: [{ role: "user", parts: [{ text: prompt }] }],
             config: { 
-                temperature: 0.4, 
+                thinkingConfig: { thinkingBudget: 32768 }, // Enabled Thinking
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
@@ -395,6 +380,7 @@ export const generateDailyMealPlan = async (
 };
 
 // ... existing handleDietDeviation ...
+// Updated to use Gemini 3 Pro for complex adjustment reasoning
 export const handleDietDeviation = async (
     currentPlan: DailyMealPlanDB,
     targetMacros: MacroPlan,
@@ -415,13 +401,10 @@ export const handleDietDeviation = async (
     Target for Day: ${targetMacros.calories} kcal
     
     ACTION REQUIRED:
-    1. ESTIMATE the macros for the deviation described by the user. Be realistic (e.g. Pizza is high calorie).
+    1. ESTIMATE the macros for the deviation described by the user. Be realistic.
     2. REPLACE the items/macros of "${mealName}" with this new data.
     3. RE-CALCULATE the "daily_totals" based on this change.
-    4. ADJUST REMAINING MEALS:
-       - If the user overate significantly at ${mealName}, REDUCE the calories of subsequent meals (Dinner/Snack) to try and balance the daily budget.
-       - Use the "Zigzag" approach: If lunch was heavy, Dinner should be very light (Salad/Soup/Shake).
-       - Do NOT modify meals that have already happened (assume chronological order: Breakfast -> Lunch -> Dinner).
+    4. ADJUST REMAINING MEALS to balance the budget if possible, using "Zigzag" approach.
     
     CURRENT JSON (To be modified):
     ${JSON.stringify(currentPlan)}
@@ -431,10 +414,10 @@ export const handleDietDeviation = async (
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-pro-preview", // Upgraded
             contents: [{ role: "user", parts: [{ text: prompt }] }],
             config: { 
-                temperature: 0.5, 
+                thinkingConfig: { thinkingBudget: 32768 }, // Enabled Thinking
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,

@@ -137,4 +137,5 @@ export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
   timestamp: number;
+  sources?: { title: string; uri: string }[];
 }

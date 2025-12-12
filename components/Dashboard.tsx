@@ -17,11 +17,17 @@ interface Props {
 
 type DietType = 'veg' | 'egg' | 'non-veg';
 
-// ... (useLongPress hook remains the same)
-const useLongPress = (callback: (e: any) => void, ms = 600) => {
+// --- OPTIMIZED HOOK FOR MOBILE ---
+// Increased delay to 800ms to avoid scroll conflict
+// Added movement threshold to detect scrolling vs holding
+const useLongPress = (callback: (e: any) => void, ms = 800) => {
     const timerRef = useRef<any>(null); 
+    const startRef = useRef<{x: number, y: number} | null>(null);
 
-    const start = useCallback(() => {
+    const start = useCallback((e: any) => {
+        if (e.touches && e.touches[0]) {
+            startRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
         timerRef.current = setTimeout(() => {
             callback({});
             if (navigator.vibrate) navigator.vibrate(50);
@@ -33,7 +39,21 @@ const useLongPress = (callback: (e: any) => void, ms = 600) => {
             clearTimeout(timerRef.current);
             timerRef.current = null;
         }
+        startRef.current = null;
     }, []);
+
+    const onTouchMove = useCallback((e: any) => {
+        if (startRef.current && e.touches && e.touches[0]) {
+            const diffX = Math.abs(e.touches[0].clientX - startRef.current.x);
+            const diffY = Math.abs(e.touches[0].clientY - startRef.current.y);
+            // Sensitivity threshold: 10px movement cancels the long press (user is likely scrolling)
+            if (diffX > 10 || diffY > 10) {
+                stop();
+            }
+        } else {
+            stop();
+        }
+    }, [stop]);
 
     return {
         onMouseDown: start,
@@ -41,7 +61,7 @@ const useLongPress = (callback: (e: any) => void, ms = 600) => {
         onMouseLeave: stop,
         onTouchStart: start,
         onTouchEnd: stop,
-        onTouchMove: stop, 
+        onTouchMove: onTouchMove, 
         className: "select-none touch-pan-y" 
     };
 };
@@ -194,7 +214,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
     setLoading(false);
   };
 
-  // ... (rest of the component remains unchanged)
   // --- ACTIONS ---
   const toggleMealCompletion = async (index: number) => {
     if (!todayPlan) return;
@@ -379,19 +398,32 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                     </span>
                 </h3>
                 
-                <button 
-                    onClick={(e) => {
-                        e.stopPropagation(); 
-                        toggleMealCompletion(index);
-                    }}
-                    className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                        meal.isCompleted 
-                        ? 'bg-green-500 border-green-500 scale-110 shadow-[0_0_15px_rgba(34,197,94,0.5)]' 
-                        : 'border-gray-500 hover:border-primary hover:bg-white/5'
-                    }`}
-                >
-                    {meal.isCompleted && <i className="fas fa-check text-white text-sm"></i>}
-                </button>
+                <div className="flex items-center gap-3">
+                    {/* Explicit Adjust Button for Mobile Accessibility */}
+                    <button 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setDeviationModal({ isOpen: true, type: 'diet', itemIndex: index, itemData: meal });
+                        }}
+                        className="w-8 h-8 rounded-full border border-gray-600/50 flex items-center justify-center text-gray-400 hover:text-primary hover:border-primary hover:bg-white/5 transition-all active:scale-95"
+                    >
+                        <i className="fas fa-magic text-xs"></i>
+                    </button>
+
+                    <button 
+                        onClick={(e) => {
+                            e.stopPropagation(); 
+                            toggleMealCompletion(index);
+                        }}
+                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
+                            meal.isCompleted 
+                            ? 'bg-green-500 border-green-500 scale-110 shadow-[0_0_15px_rgba(34,197,94,0.5)]' 
+                            : 'border-gray-500 hover:border-primary hover:bg-white/5'
+                        }`}
+                    >
+                        {meal.isCompleted && <i className="fas fa-check text-white text-sm"></i>}
+                    </button>
+                </div>
             </div>
             <div className={`p-5 transition-opacity duration-300 ${meal.isCompleted ? 'opacity-60 grayscale-[0.3]' : 'opacity-100'}`}>
                 <div className="flex justify-between items-start mb-4">
