@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserProfile, Goal, ActivityLevel } from '../types';
 import { supabase } from '../services/supabaseClient';
 import { calculatePlan } from './Calculator';
@@ -11,11 +11,24 @@ interface Props {
 }
 
 const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut }) => {
-  const [formData, setFormData] = useState<UserProfile>(profile);
+  const [formData, setFormData] = useState<UserProfile>({
+      ...profile,
+      dietary_preference: profile.dietary_preference || 'non-veg' // Default fallback
+  });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
-  const bmi = (formData.weight / ((formData.height/100) * (formData.height/100))).toFixed(1);
+  // Sync state with props if they change
+  useEffect(() => {
+    setFormData({
+        ...profile,
+        dietary_preference: profile.dietary_preference || 'non-veg'
+    });
+  }, [profile]);
+
+  // Safe BMI Calculation
+  const hM = formData.height / 100;
+  const bmi = (hM > 0 && formData.weight > 0) ? (formData.weight / (hM * hM)).toFixed(1) : 'N/A';
 
   const handleChange = (field: keyof UserProfile, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -34,12 +47,17 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
       const newMacros = calculatePlan(formData);
 
       const updates = {
+        name: formData.name,
+        age: formData.age,
+        weight: formData.weight,
+        height: formData.height,
+        gender: formData.gender,
         goal: formData.goal,
         activity_level: formData.activityLevel,
         dietary_preference: formData.dietary_preference,
         daily_calories: newMacros.calories,
-        weekly_calories: newMacros.calories * 7,
-        updated_at: new Date()
+        weekly_calories: newMacros.calories * 7
+        // updated_at removed to prevent errors if column missing in old DBs
       };
 
       const { error } = await supabase
@@ -63,7 +81,12 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
 
     } catch (err: any) {
       console.error(err);
-      setMessage({ text: "Failed to update profile.", type: 'error' });
+      // Safe Error Extraction
+      const errorMsg = typeof err === 'string' ? err : (err?.message || 'An unexpected error occurred. Check DB permissions.');
+      setMessage({ 
+        text: `Failed to update profile: ${errorMsg}`, 
+        type: 'error' 
+      });
     } finally {
       setLoading(false);
     }
@@ -158,10 +181,10 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
               <select 
                   value={formData.activityLevel}
                   onChange={(e) => handleChange('activityLevel', e.target.value)}
-                  className="w-full bg-secondary border border-gray-700 rounded-xl p-3 text-sm text-white focus:border-primary outline-none"
+                  className="w-full bg-secondary border border-gray-700 rounded-xl p-3 text-sm text-white focus:border-primary outline-none truncate"
               >
                   {Object.values(ActivityLevel).map(level => (
-                      <option key={level} value={level}>{level}</option>
+                      <option key={level} value={level} className="truncate">{level}</option>
                   ))}
               </select>
           </div>

@@ -1,6 +1,6 @@
 
 // ... (imports remain the same)
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserProfile, MacroPlan, PersonalizedPlan, DailyMealPlanDB, DietMeal, ProgressEntry, WeightPrediction } from '../types';
 import { calculatePlan } from './Calculator';
 import { supabase } from '../services/supabaseClient';
@@ -12,13 +12,12 @@ interface Props {
   userId: string;
   profile: UserProfile;
   workoutPlan: PersonalizedPlan | null;
-  logs?: ProgressEntry[]; // Added logs prop for analytics
+  logs?: ProgressEntry[]; 
   onSignOut: () => void;
+  onNavigate: (tab: 'dashboard' | 'library' | 'progress' | 'profile') => void;
 }
 
 type DietType = 'veg' | 'egg' | 'non-veg';
-
-// UseLongPress hook removed as it is no longer needed for cards (replaced by dedicated button)
 
 interface SmartAlert {
     id: string;
@@ -28,7 +27,7 @@ interface SmartAlert {
     icon: string;
 }
 
-const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], onSignOut }) => {
+const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], onSignOut, onNavigate }) => {
   // Use stored calories from DB if available to maintain "Weekly Budget" consistency
   const plan: MacroPlan = profile.daily_calories 
     ? { ...calculatePlan(profile), calories: profile.daily_calories } 
@@ -64,6 +63,13 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
   const [deviationInput, setDeviationInput] = useState('');
   const [isProcessingDeviation, setIsProcessingDeviation] = useState(false);
 
+  // --- HELPER: SAFE ERROR MESSAGE ---
+  const getErrorMessage = (error: any) => {
+    if (typeof error === 'string') return error;
+    if (error instanceof Error) return error.message;
+    return error?.message || 'An unexpected error occurred';
+  };
+
   // --- DERIVED STATE (REAL-TIME TRACKING) ---
   const getConsumedMacros = (currentPlan: DailyMealPlanDB | null) => {
     if (!currentPlan) return { p: 0, c: 0, f: 0, cal: 0 };
@@ -83,10 +89,10 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
   const consumed = getConsumedMacros(todayPlan);
 
   const totalCalTarget = plan.calories || 2000;
-  const calPct = Math.min(100, Math.round((consumed.cal / totalCalTarget) * 100));
-  const pPct = Math.min(100, Math.round((consumed.p / plan.protein) * 100));
-  const cPct = Math.min(100, Math.round((consumed.c / plan.carbs) * 100));
-  const fPct = Math.min(100, Math.round((consumed.f / plan.fats) * 100));
+  const calPct = totalCalTarget > 0 ? Math.min(100, Math.round((consumed.cal / totalCalTarget) * 100)) : 0;
+  const pPct = plan.protein > 0 ? Math.min(100, Math.round((consumed.p / plan.protein) * 100)) : 0;
+  const cPct = plan.carbs > 0 ? Math.min(100, Math.round((consumed.c / plan.carbs) * 100)) : 0;
+  const fPct = plan.fats > 0 ? Math.min(100, Math.round((consumed.f / plan.fats) * 100)) : 0;
 
   // --- HELPERS ---
   const getTodayDate = () => {
@@ -205,16 +211,16 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
           }
       }
 
-      // 5. Streak Calculation (Existing Logic moved here for consistency)
+      // 5. Streak Calculation
       let streakCount = 0;
       if (recentPlans.length > 0) {
           for (let i = 0; i < recentPlans.length; i++) {
-             const plan = recentPlans[i];
-             const hasActivity = plan.meals.some(m => m.isCompleted);
+             const historicalPlan = recentPlans[i]; // Renamed to avoid shadowing outer 'plan'
+             const hasActivity = historicalPlan.meals.some(m => m.isCompleted);
              if (hasActivity) {
                  streakCount++;
              } else {
-                 if (plan.date !== getTodayDate()) break;
+                 if (historicalPlan.date !== getTodayDate()) break;
              }
           }
           setStreak(streakCount);
@@ -245,7 +251,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
             setTodayPlan(todayEntry || null);
         }
     } catch (err: any) {
-        console.error("Failed to fetch plans:", err.message || err);
+        console.error("Failed to fetch plans:", getErrorMessage(err));
     }
     setLoading(false);
   };
@@ -363,7 +369,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
         setRecentPlans(prev => [refreshedData || newPlan, ...prev.filter(p => p.date !== today)]);
         setPreferences(''); 
     } catch (err: any) {
-        alert(`Failed to generate plan: ${err.message}`);
+        alert(`Failed to generate plan: ${getErrorMessage(err)}`);
         setShowRegenInput(true);
     } finally {
         setGenerating(false);
@@ -404,103 +410,11 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
             setDeviationModal(prev => ({ ...prev, isOpen: false }));
             setDeviationInput('');
         }
-    } catch (err) {
-        alert("Could not adjust plan.");
+    } catch (err: any) {
+        alert(`Could not adjust plan: ${getErrorMessage(err)}`);
     } finally {
         setIsProcessingDeviation(false);
     }
-  };
-
-  const DietMealCard: React.FC<{ meal: DietMeal, index: number }> = ({ meal, index }) => {
-      // REMOVED: Long press logic. Now using dedicated buttons.
-      return (
-        <div 
-            className={`glass-card rounded-2xl overflow-hidden group transition-all duration-300 relative ${
-                meal.isCompleted ? 'border-green-500/30 bg-green-900/10' : ''
-            }`}
-        >
-            <div className={`p-4 border-b flex justify-between items-center ${meal.isCompleted ? 'bg-green-500/10 border-green-500/20' : 'bg-white/5 border-white/5'}`}>
-                <h3 className={`font-bold text-lg flex items-center gap-3 ${meal.isCompleted ? 'text-green-100' : 'text-white'}`}>
-                    <div className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold ${
-                        meal.isCompleted ? 'bg-green-500 text-white' : 'bg-primary text-black'
-                    }`}>
-                        {index + 1}
-                    </div>
-                    <span className={meal.isCompleted ? 'line-through decoration-green-500/50 opacity-70' : ''}>
-                        {meal.name}
-                    </span>
-                </h3>
-                
-                <div className="flex items-center gap-3">
-                    <button 
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onTouchStart={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setDeviationModal({ isOpen: true, type: 'diet', itemIndex: index, itemData: meal });
-                        }}
-                        className="w-8 h-8 rounded-full border border-gray-600/50 flex items-center justify-center text-gray-400 hover:text-primary hover:border-primary hover:bg-white/5 transition-all active:scale-95"
-                    >
-                        <i className="fas fa-magic text-xs"></i>
-                    </button>
-
-                    <button 
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onTouchStart={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                            e.stopPropagation(); 
-                            toggleMealCompletion(index);
-                        }}
-                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                            meal.isCompleted 
-                            ? 'bg-green-500 border-green-500 scale-110 shadow-[0_0_15px_rgba(34,197,94,0.5)]' 
-                            : 'border-gray-500 hover:border-primary hover:bg-white/5'
-                        }`}
-                    >
-                        {meal.isCompleted && <i className="fas fa-check text-white text-sm"></i>}
-                    </button>
-                </div>
-            </div>
-            <div className={`p-5 transition-opacity duration-300 ${meal.isCompleted ? 'opacity-60 grayscale-[0.3]' : 'opacity-100'}`}>
-                <div className="flex justify-between items-start mb-4">
-                     <ul className="space-y-2 flex-1">
-                        {meal.items.map((item: string, i: number) => (
-                            <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
-                                <i className="fas fa-caret-right text-gray-500 mt-1 shrink-0"></i>
-                                <span className="leading-tight">{item}</span>
-                            </li>
-                        ))}
-                    </ul>
-                    <span className="text-xs font-mono bg-black/40 px-2 py-1 rounded text-gray-400 whitespace-nowrap ml-2 mt-1">
-                        {meal.time}
-                    </span>
-                </div>
-                <div className="flex gap-2 pt-3 border-t border-white/5">
-                    <div className="flex-1 grid grid-cols-3 gap-1">
-                        <div className="bg-black/20 rounded p-1 text-center">
-                            <div className="text-[9px] text-gray-500 uppercase">Pro</div>
-                            <div className="text-blue-400 font-bold text-xs">{meal.macros.p}</div>
-                        </div>
-                        <div className="bg-black/20 rounded p-1 text-center">
-                            <div className="text-[9px] text-gray-500 uppercase">Carb</div>
-                            <div className="text-green-400 font-bold text-xs">{meal.macros.c}</div>
-                        </div>
-                        <div className="bg-black/20 rounded p-1 text-center">
-                            <div className="text-[9px] text-gray-500 uppercase">Fat</div>
-                            <div className="text-yellow-400 font-bold text-xs">{meal.macros.f}</div>
-                        </div>
-                    </div>
-                    <div className="bg-primary/10 px-3 rounded-lg flex flex-col justify-center items-center min-w-[60px]">
-                        <div className="text-[9px] text-primary font-bold uppercase">Cal</div>
-                        <div className="text-primary font-bold text-sm">{meal.macros.cal}</div>
-                    </div>
-                </div>
-            </div>
-            {meal.isCompleted && (
-                <div className="absolute inset-0 pointer-events-none bg-green-500/5 mix-blend-overlay"></div>
-            )}
-        </div>
-      );
   };
 
   // --- RENDER ---
@@ -513,10 +427,23 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
       <div className="flex justify-between items-center animate-fade-in">
         <div>
           <p className="text-gray-400 text-sm font-medium">{getTimeGreeting()},</p>
-          <div className="flex items-baseline gap-2">
-            <h1 className="text-3xl font-black text-white tracking-tight">{profile.name}</h1>
+          {/* Changed: Wrapper div has onClick */}
+          <div 
+            onClick={() => onNavigate('profile')}
+            className="flex items-center gap-2 group cursor-pointer active:scale-95 transition-transform origin-left"
+          >
+            <h1 className="text-3xl font-black text-white tracking-tight group-hover:text-primary transition-colors">{profile.name}</h1>
+            
+            {/* Edit Profile Button - Visual Indicator */}
+            <button 
+                className="w-6 h-6 rounded-full bg-white/5 group-hover:bg-primary group-hover:text-dark border border-white/10 flex items-center justify-center transition-all text-gray-400"
+                aria-label="Edit Profile"
+            >
+                <i className="fas fa-pencil-alt text-[10px]"></i>
+            </button>
+
             {streak > 1 && (
-                <div className="flex items-center gap-1 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full">
+                <div className="flex items-center gap-1 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full ml-1" onClick={(e) => e.stopPropagation()}>
                     <i className="fas fa-fire text-orange-500 text-xs animate-pulse"></i>
                     <span className="text-orange-500 font-bold text-xs">{streak} Days</span>
                 </div>
@@ -728,7 +655,89 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                 ) : (
                     <div className={`space-y-4 ${generating ? 'opacity-50 blur-sm pointer-events-none transition-all' : ''}`}>
                          {todayPlan.meals && Array.isArray(todayPlan.meals) ? todayPlan.meals.map((meal, idx) => (
-                            <DietMealCard key={idx} meal={meal} index={idx} />
+                            <div 
+                                key={idx}
+                                className={`glass-card rounded-2xl overflow-hidden group transition-all duration-300 relative ${
+                                    meal.isCompleted ? 'border-green-500/30 bg-green-900/10' : ''
+                                }`}
+                            >
+                                <div className={`p-4 border-b flex justify-between items-center ${meal.isCompleted ? 'bg-green-500/10 border-green-500/20' : 'bg-white/5 border-white/5'}`}>
+                                    <h3 className={`font-bold text-lg flex items-center gap-3 ${meal.isCompleted ? 'text-green-100' : 'text-white'}`}>
+                                        <div className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold ${
+                                            meal.isCompleted ? 'bg-green-500 text-white' : 'bg-primary text-black'
+                                        }`}>
+                                            {idx + 1}
+                                        </div>
+                                        <span className={meal.isCompleted ? 'line-through decoration-green-500/50 opacity-70' : ''}>
+                                            {meal.name}
+                                        </span>
+                                    </h3>
+                                    
+                                    <div className="flex items-center gap-3">
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDeviationModal({ isOpen: true, type: 'diet', itemIndex: idx, itemData: meal });
+                                            }}
+                                            className="w-8 h-8 rounded-full border border-gray-600/50 flex items-center justify-center text-gray-400 hover:text-primary hover:border-primary hover:bg-white/5 transition-all active:scale-95 cursor-pointer"
+                                        >
+                                            <i className="fas fa-magic text-xs"></i>
+                                        </button>
+
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation(); 
+                                                toggleMealCompletion(idx);
+                                            }}
+                                            className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-300 cursor-pointer ${
+                                                meal.isCompleted 
+                                                ? 'bg-green-500 border-green-500 scale-110 shadow-[0_0_15px_rgba(34,197,94,0.5)]' 
+                                                : 'border-gray-500 hover:border-primary hover:bg-white/5'
+                                            }`}
+                                        >
+                                            {meal.isCompleted && <i className="fas fa-check text-white text-sm"></i>}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className={`p-5 transition-opacity duration-300 ${meal.isCompleted ? 'opacity-60 grayscale-[0.3]' : 'opacity-100'}`}>
+                                    <div className="flex justify-between items-start mb-4">
+                                         <ul className="space-y-2 flex-1">
+                                            {meal.items.map((item: string, i: number) => (
+                                                <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+                                                    <i className="fas fa-caret-right text-gray-500 mt-1 shrink-0"></i>
+                                                    <span className="leading-tight">{item}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        <span className="text-xs font-mono bg-black/40 px-2 py-1 rounded text-gray-400 whitespace-nowrap ml-2 mt-1">
+                                            {meal.time}
+                                        </span>
+                                    </div>
+                                    <div className="flex gap-2 pt-3 border-t border-white/5">
+                                        <div className="flex-1 grid grid-cols-3 gap-1">
+                                            <div className="bg-black/20 rounded p-1 text-center">
+                                                <div className="text-[9px] text-gray-500 uppercase">Pro</div>
+                                                <div className="text-blue-400 font-bold text-xs">{meal.macros.p}</div>
+                                            </div>
+                                            <div className="bg-black/20 rounded p-1 text-center">
+                                                <div className="text-[9px] text-gray-500 uppercase">Carb</div>
+                                                <div className="text-green-400 font-bold text-xs">{meal.macros.c}</div>
+                                            </div>
+                                            <div className="bg-black/20 rounded p-1 text-center">
+                                                <div className="text-[9px] text-gray-500 uppercase">Fat</div>
+                                                <div className="text-yellow-400 font-bold text-xs">{meal.macros.f}</div>
+                                            </div>
+                                        </div>
+                                        <div className="bg-primary/10 px-3 rounded-lg flex flex-col justify-center items-center min-w-[60px]">
+                                            <div className="text-[9px] text-primary font-bold uppercase">Cal</div>
+                                            <div className="text-primary font-bold text-sm">{meal.macros.cal}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {meal.isCompleted && (
+                                    <div className="absolute inset-0 pointer-events-none bg-green-500/5 mix-blend-overlay"></div>
+                                )}
+                            </div>
                          )) : (
                             <div className="glass-card p-6 text-center text-red-400 flex flex-col items-center">
                                 <i className="fas fa-exclamation-triangle mb-2 text-2xl"></i>
@@ -893,7 +902,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                         const weeklyConsumed = recentPlans.reduce((acc, p) => 
                             acc + p.meals.reduce((mAcc, m) => m.isCompleted ? mAcc + m.macros.cal : mAcc, 0), 
                         0);
-                        const weeklyPct = Math.min(100, (weeklyConsumed / weeklyLimit) * 100);
+                        const weeklyPct = weeklyLimit > 0 ? Math.min(100, (weeklyConsumed / weeklyLimit) * 100) : 0;
 
                         return (
                             <>

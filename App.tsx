@@ -230,7 +230,7 @@ const App: React.FC = () => {
       <main className="flex-1 overflow-hidden relative z-10 flex flex-col">
         {/* Added webkit-overflow-scrolling for smooth iOS scroll */}
         <div className="flex-1 overflow-y-auto scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
-          {currentTab === 'dashboard' && <Dashboard profile={profile} userId={session.user.id} workoutPlan={workoutPlan} logs={progressLogs} onSignOut={handleSignOut} />}
+          {currentTab === 'dashboard' && <Dashboard profile={profile} userId={session.user.id} workoutPlan={workoutPlan} logs={progressLogs} onSignOut={handleSignOut} onNavigate={setCurrentTab} />}
           {currentTab === 'library' && <Library />}
           {currentTab === 'progress' && (
             <ProgressTracker 

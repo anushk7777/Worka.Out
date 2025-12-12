@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { UserProfile, ActivityLevel, Goal, Gender } from '../types';
 import { supabase } from '../services/supabaseClient';
@@ -19,7 +20,8 @@ const Onboarding: React.FC<Props> = ({ onComplete }) => {
   const [formData, setFormData] = useState<Partial<UserProfile>>({
     activityLevel: ActivityLevel.SEDENTARY,
     goal: Goal.FAT_LOSS,
-    gender: Gender.MALE
+    gender: Gender.MALE,
+    dietary_preference: 'non-veg' // Default
   });
 
   const handleChange = (field: keyof UserProfile, value: any) => {
@@ -27,10 +29,10 @@ const Onboarding: React.FC<Props> = ({ onComplete }) => {
   };
 
   const handleNext = () => {
-    if (step < 3) {
+    if (step < 4) {
       setStep(step + 1);
-    } else if (step === 3) {
-      setStep(4);
+    } else if (step === 4) {
+      setStep(5);
     }
   };
 
@@ -73,6 +75,7 @@ const Onboarding: React.FC<Props> = ({ onComplete }) => {
         gender: finalProfile.gender,
         activity_level: finalProfile.activityLevel,
         goal: finalProfile.goal,
+        dietary_preference: finalProfile.dietary_preference,
         body_fat: finalProfile.bodyFat,
         daily_calories: calculatedMacros.calories,
         weekly_calories: calculatedMacros.calories * 7
@@ -106,7 +109,7 @@ const Onboarding: React.FC<Props> = ({ onComplete }) => {
       // 3. Create Baseline Log
       const logData = {
         user_id: user.id,
-        date: getTodayISO(), // FIXED: Uses YYYY-MM-DD
+        date: getTodayISO(), 
         weight: Number(finalProfile.weight),
         body_fat: finalProfile.bodyFat ? Number(finalProfile.bodyFat) : null,
         photo_url: photoUrl,
@@ -122,7 +125,7 @@ const Onboarding: React.FC<Props> = ({ onComplete }) => {
       // 5. Save Workout Plan
       const planData = {
         user_id: user.id,
-        diet_plan: [], // Empty, as we use daily_meal_plans table now
+        diet_plan: [], 
         workout_plan: workoutPlan
       };
       
@@ -141,7 +144,7 @@ const Onboarding: React.FC<Props> = ({ onComplete }) => {
     <div className="flex flex-col items-center justify-center min-h-[80vh] p-4">
       <div className="bg-secondary p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-700 relative">
         <h2 className="text-2xl font-bold text-primary mb-6 text-center">
-          {step === 1 ? "Basics" : step === 2 ? "Stats" : step === 3 ? "Goals" : "Baseline Check"}
+          {step === 1 ? "Basics" : step === 2 ? "Stats" : step === 3 ? "Preferences" : step === 4 ? "Goals" : "Baseline Check"}
         </h2>
 
         {step === 1 && (
@@ -206,10 +209,34 @@ const Onboarding: React.FC<Props> = ({ onComplete }) => {
 
         {step === 3 && (
           <div className="space-y-4">
+            <label className="block text-sm font-medium mb-1">Diet Preference</label>
+            <div className="grid grid-cols-3 gap-2">
+                {(['veg', 'egg', 'non-veg'] as const).map((type) => (
+                    <button
+                        key={type}
+                        onClick={() => handleChange('dietary_preference', type)}
+                        className={`py-3 rounded-xl border transition-all flex flex-col items-center gap-1 ${
+                            formData.dietary_preference === type 
+                            ? type === 'veg' ? 'bg-green-500 text-white border-green-500' 
+                            : type === 'egg' ? 'bg-yellow-500 text-black border-yellow-500'
+                            : 'bg-red-500 text-white border-red-500'
+                            : 'bg-dark border-gray-600 text-gray-400 hover:border-gray-500'
+                        }`}
+                    >
+                        <i className={`fas ${type === 'veg' ? 'fa-leaf' : type === 'egg' ? 'fa-egg' : 'fa-drumstick-bite'} text-lg`}></i>
+                        <span className="text-[10px] font-bold uppercase">{type}</span>
+                    </button>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {step === 4 && (
+          <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1">Activity Level</label>
               <select 
-                className="w-full bg-dark border border-gray-600 rounded p-3 text-white focus:border-primary outline-none"
+                className="w-full bg-dark border border-gray-600 rounded p-3 text-white focus:border-primary outline-none text-sm"
                 value={formData.activityLevel}
                 onChange={(e) => handleChange('activityLevel', e.target.value)}
               >
@@ -233,7 +260,7 @@ const Onboarding: React.FC<Props> = ({ onComplete }) => {
           </div>
         )}
 
-        {step === 4 && (
+        {step === 5 && (
           <div className="space-y-6 text-center">
             <div className="bg-dark/50 p-4 rounded-xl border border-gray-600">
               <i className="fas fa-camera text-4xl text-primary mb-3"></i>
@@ -269,7 +296,7 @@ const Onboarding: React.FC<Props> = ({ onComplete }) => {
                 </button>
             )}
             
-            {step === 4 ? (
+            {step === 5 ? (
                 <button 
                   onClick={handleFinalize}
                   disabled={loading || !formData.bodyFat}
@@ -297,7 +324,7 @@ const Onboarding: React.FC<Props> = ({ onComplete }) => {
         <BodyFatAnalyzer 
           onClose={() => setShowAnalyzer(false)} 
           onAnalysisComplete={handleAnalysisComplete}
-          profile={formData} // Pass current form data to analyzer
+          profile={formData} 
         />
       )}
     </div>
