@@ -25,6 +25,7 @@ export interface UserProfile {
   gender: Gender;
   activityLevel: ActivityLevel;
   goal: Goal;
+  dietary_preference?: 'veg' | 'egg' | 'non-veg'; // New Field
   bodyFat?: number; // Optional percentage
   daily_calories?: number; // Backend stored target
   weekly_calories?: number; // Backend stored budget

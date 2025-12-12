@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from './services/supabaseClient';
 import Auth from './components/Auth';
@@ -7,6 +8,7 @@ import Library from './components/Library';
 import ProgressTracker from './components/ProgressTracker';
 import CheckInDueModal from './components/CheckInDueModal';
 import ChatInterface from './components/ChatInterface'; // Import Chat
+import ProfileSettings from './components/ProfileSettings'; // Import Profile
 import { UserProfile, ProgressEntry, ActivityLevel, Goal, Gender, PersonalizedPlan } from './types';
 
 const App: React.FC = () => {
@@ -14,7 +16,7 @@ const App: React.FC = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [workoutPlan, setWorkoutPlan] = useState<PersonalizedPlan | null>(null);
   const [progressLogs, setProgressLogs] = useState<ProgressEntry[]>([]);
-  const [currentTab, setCurrentTab] = useState<'dashboard' | 'library' | 'progress'>('dashboard');
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'library' | 'progress' | 'profile'>('dashboard');
   const [loading, setLoading] = useState(true);
   
   // Check-in logic states
@@ -67,6 +69,7 @@ const App: React.FC = () => {
           gender: profileData.gender as Gender,
           activityLevel: profileData.activity_level as ActivityLevel,
           goal: profileData.goal as Goal,
+          dietary_preference: profileData.dietary_preference, // Load preference
           bodyFat: profileData.body_fat,
           daily_calories: profileData.daily_calories,
           weekly_calories: profileData.weekly_calories
@@ -136,6 +139,10 @@ const App: React.FC = () => {
       setProfile({ ...profile, weight: log.weight });
     }
     setShowCheckInModal(false);
+  };
+
+  const handleUpdateProfile = (updatedProfile: UserProfile) => {
+      setProfile(updatedProfile);
   };
 
   const handleSignOut = async () => {
@@ -234,6 +241,13 @@ const App: React.FC = () => {
               onScannerLaunched={() => setAutoLaunchScanner(false)}
             />
           )}
+          {currentTab === 'profile' && (
+              <ProfileSettings 
+                profile={profile}
+                onUpdateProfile={handleUpdateProfile}
+                onSignOut={handleSignOut}
+              />
+          )}
         </div>
       </main>
 
@@ -251,32 +265,42 @@ const App: React.FC = () => {
       <nav className="glass-heavy h-[80px] flex justify-around items-center px-6 z-50 shrink-0 pb-4 relative">
         <button 
           onClick={() => setCurrentTab('dashboard')}
-          className={`group flex flex-col items-center p-2 w-16 transition-all duration-300 ${currentTab === 'dashboard' ? 'translate-y-[-5px]' : 'opacity-50 hover:opacity-80'}`}
+          className={`group flex flex-col items-center p-2 w-14 transition-all duration-300 ${currentTab === 'dashboard' ? 'translate-y-[-5px]' : 'opacity-50 hover:opacity-80'}`}
         >
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1 transition-all ${currentTab === 'dashboard' ? 'bg-primary text-dark shadow-lg shadow-primary/40' : 'bg-transparent text-white'}`}>
-            <i className="fas fa-chart-pie text-lg"></i>
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center mb-1 transition-all ${currentTab === 'dashboard' ? 'bg-primary text-dark shadow-lg shadow-primary/40' : 'bg-transparent text-white'}`}>
+            <i className="fas fa-chart-pie text-sm"></i>
           </div>
-          <span className={`text-[10px] font-bold tracking-wide ${currentTab === 'dashboard' ? 'text-primary' : 'text-gray-400'}`}>PLAN</span>
+          <span className={`text-[9px] font-bold tracking-wide ${currentTab === 'dashboard' ? 'text-primary' : 'text-gray-400'}`}>PLAN</span>
         </button>
 
         <button 
           onClick={() => setCurrentTab('progress')}
-          className={`group flex flex-col items-center p-2 w-16 transition-all duration-300 ${currentTab === 'progress' ? 'translate-y-[-5px]' : 'opacity-50 hover:opacity-80'}`}
+          className={`group flex flex-col items-center p-2 w-14 transition-all duration-300 ${currentTab === 'progress' ? 'translate-y-[-5px]' : 'opacity-50 hover:opacity-80'}`}
         >
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1 transition-all ${currentTab === 'progress' ? 'bg-primary text-dark shadow-lg shadow-primary/40' : 'bg-transparent text-white'}`}>
-             <i className="fas fa-chart-line text-lg"></i>
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center mb-1 transition-all ${currentTab === 'progress' ? 'bg-primary text-dark shadow-lg shadow-primary/40' : 'bg-transparent text-white'}`}>
+             <i className="fas fa-chart-line text-sm"></i>
           </div>
-          <span className={`text-[10px] font-bold tracking-wide ${currentTab === 'progress' ? 'text-primary' : 'text-gray-400'}`}>LOG</span>
+          <span className={`text-[9px] font-bold tracking-wide ${currentTab === 'progress' ? 'text-primary' : 'text-gray-400'}`}>LOG</span>
         </button>
 
         <button 
           onClick={() => setCurrentTab('library')}
-          className={`group flex flex-col items-center p-2 w-16 transition-all duration-300 ${currentTab === 'library' ? 'translate-y-[-5px]' : 'opacity-50 hover:opacity-80'}`}
+          className={`group flex flex-col items-center p-2 w-14 transition-all duration-300 ${currentTab === 'library' ? 'translate-y-[-5px]' : 'opacity-50 hover:opacity-80'}`}
         >
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1 transition-all ${currentTab === 'library' ? 'bg-primary text-dark shadow-lg shadow-primary/40' : 'bg-transparent text-white'}`}>
-             <i className="fas fa-book text-lg"></i>
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center mb-1 transition-all ${currentTab === 'library' ? 'bg-primary text-dark shadow-lg shadow-primary/40' : 'bg-transparent text-white'}`}>
+             <i className="fas fa-book text-sm"></i>
           </div>
-          <span className={`text-[10px] font-bold tracking-wide ${currentTab === 'library' ? 'text-primary' : 'text-gray-400'}`}>LIB</span>
+          <span className={`text-[9px] font-bold tracking-wide ${currentTab === 'library' ? 'text-primary' : 'text-gray-400'}`}>LIB</span>
+        </button>
+
+        <button 
+          onClick={() => setCurrentTab('profile')}
+          className={`group flex flex-col items-center p-2 w-14 transition-all duration-300 ${currentTab === 'profile' ? 'translate-y-[-5px]' : 'opacity-50 hover:opacity-80'}`}
+        >
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center mb-1 transition-all ${currentTab === 'profile' ? 'bg-primary text-dark shadow-lg shadow-primary/40' : 'bg-transparent text-white'}`}>
+             <i className="fas fa-user text-sm"></i>
+          </div>
+          <span className={`text-[9px] font-bold tracking-wide ${currentTab === 'profile' ? 'text-primary' : 'text-gray-400'}`}>YOU</span>
         </button>
       </nav>
     </div>

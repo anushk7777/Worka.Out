@@ -1,3 +1,4 @@
+
 // ... (imports remain the same)
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { UserProfile, MacroPlan, PersonalizedPlan, DailyMealPlanDB, DietMeal, ProgressEntry, WeightPrediction } from '../types';
@@ -17,54 +18,15 @@ interface Props {
 
 type DietType = 'veg' | 'egg' | 'non-veg';
 
-// --- OPTIMIZED HOOK FOR MOBILE ---
-// Increased delay to 800ms to avoid scroll conflict
-// Added movement threshold to detect scrolling vs holding
-const useLongPress = (callback: (e: any) => void, ms = 800) => {
-    const timerRef = useRef<any>(null); 
-    const startRef = useRef<{x: number, y: number} | null>(null);
+// UseLongPress hook removed as it is no longer needed for cards (replaced by dedicated button)
 
-    const start = useCallback((e: any) => {
-        if (e.touches && e.touches[0]) {
-            startRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        }
-        timerRef.current = setTimeout(() => {
-            callback({});
-            if (navigator.vibrate) navigator.vibrate(50);
-        }, ms);
-    }, [callback, ms]);
-
-    const stop = useCallback(() => {
-        if (timerRef.current) {
-            clearTimeout(timerRef.current);
-            timerRef.current = null;
-        }
-        startRef.current = null;
-    }, []);
-
-    const onTouchMove = useCallback((e: any) => {
-        if (startRef.current && e.touches && e.touches[0]) {
-            const diffX = Math.abs(e.touches[0].clientX - startRef.current.x);
-            const diffY = Math.abs(e.touches[0].clientY - startRef.current.y);
-            // Sensitivity threshold: 10px movement cancels the long press (user is likely scrolling)
-            if (diffX > 10 || diffY > 10) {
-                stop();
-            }
-        } else {
-            stop();
-        }
-    }, [stop]);
-
-    return {
-        onMouseDown: start,
-        onMouseUp: stop,
-        onMouseLeave: stop,
-        onTouchStart: start,
-        onTouchEnd: stop,
-        onTouchMove: onTouchMove, 
-        className: "select-none touch-pan-y" 
-    };
-};
+interface SmartAlert {
+    id: string;
+    type: 'info' | 'warning' | 'critical' | 'success';
+    title: string;
+    message: string;
+    icon: string;
+}
 
 const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], onSignOut }) => {
   // Use stored calories from DB if available to maintain "Weekly Budget" consistency
@@ -80,11 +42,13 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
   const [loading, setLoading] = useState(true);
   const [preferences, setPreferences] = useState('');
   const [showRegenInput, setShowRegenInput] = useState(false);
-  const [dietType, setDietType] = useState<DietType>('non-veg');
+  
+  // Initialize dietType from profile preference or default to non-veg
+  const [dietType, setDietType] = useState<DietType>((profile.dietary_preference as DietType) || 'non-veg');
   
   // New Feature States
   const [streak, setStreak] = useState(0);
-  const [notifications, setNotifications] = useState<string[]>([]);
+  const [smartAlerts, setSmartAlerts] = useState<SmartAlert[]>([]); // Typed Alerts
   const [showScanner, setShowScanner] = useState(false);
   
   // Analytics State
@@ -148,16 +112,102 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
   // Run Analytics when logs change
   useEffect(() => {
       if (logs.length > 0) {
-          // Calculate Prediction
-          const pred = predictWeightTrajectory(logs, plan, undefined); // Pass target if available in future
+          const pred = predictWeightTrajectory(logs, plan, undefined); 
           setPrediction(pred);
       }
   }, [logs, plan]);
 
-  // --- STREAK & NOTIFICATION LOGIC ---
+  // --- SMART NOTIFICATION ENGINE ---
   useEffect(() => {
+      const alerts: SmartAlert[] = [];
+      const now = new Date();
+      const currentHour = now.getHours();
+
+      // 1. Meal Reminders (Time-based & Plan-based)
+      if (todayPlan) {
+          const checkMeal = (nameKeywords: string[], startHour: number, endHour: number, label: string) => {
+              if (currentHour >= startHour && currentHour < endHour) {
+                  const meal = todayPlan.meals.find(m => nameKeywords.some(k => m.name.toLowerCase().includes(k)));
+                  if (meal && !meal.isCompleted) {
+                      alerts.push({
+                          id: 'meal-reminder',
+                          type: 'info',
+                          title: `${label} Time`,
+                          message: `Don't forget to track your ${label.toLowerCase()}.`,
+                          icon: 'fa-utensils'
+                      });
+                  }
+              }
+          };
+          checkMeal(['break'], 8, 11, 'Breakfast');
+          checkMeal(['lunch'], 12, 15, 'Lunch');
+          checkMeal(['dinner'], 19, 22, 'Dinner');
+      }
+
+      // 2. Inactivity Alert (Weight Log)
+      if (logs.length > 0) {
+          const lastLogDate = new Date(logs[logs.length - 1].created_at || logs[logs.length - 1].date);
+          const diffTime = Math.abs(now.getTime() - lastLogDate.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          if (diffDays > 3) {
+              alerts.push({
+                  id: 'log-inactivity',
+                  type: 'warning',
+                  title: 'Update Stats',
+                  message: `It's been ${diffDays} days since your last weigh-in. Log now to keep AI accurate.`,
+                  icon: 'fa-weight'
+              });
+          }
+      } else {
+           alerts.push({
+              id: 'no-logs',
+              type: 'info',
+              title: 'Start Tracking',
+              message: 'Log your first weight entry to unlock AI predictions.',
+              icon: 'fa-flag-checkered'
+          });
+      }
+
+      // 3. Aggressive Deficit Warning (Late Night Check)
+      if (currentHour >= 20 && todayPlan) {
+          const remainingCalories = totalCalTarget - consumed.cal;
+          if (remainingCalories > 800) {
+              alerts.push({
+                  id: 'high-deficit',
+                  type: 'critical',
+                  title: 'High Deficit Warning',
+                  message: `You are ${remainingCalories} kcal under budget. This may cause muscle loss. Consider a protein snack.`,
+                  icon: 'fa-battery-quarter'
+              });
+          }
+      }
+
+      // 4. Refeed Recommendation (Metabolic Adaptation Check)
+      if (recentPlans.length >= 3) {
+          // Check last 3 days
+          const last3Days = recentPlans.slice(0, 3);
+          const avgIntake = last3Days.reduce((acc, p) => {
+              const dayCals = p.meals.reduce((mAcc, m) => m.isCompleted ? mAcc + m.macros.cal : mAcc, 0);
+              return acc + dayCals;
+          }, 0) / 3;
+
+          const bmrApprox = plan.bmr || 1500;
+          
+          if (avgIntake < bmrApprox && avgIntake > 0) {
+               alerts.push({
+                  id: 'refeed-rec',
+                  type: 'warning',
+                  title: 'Metabolism Alert',
+                  message: 'Consistent low intake detected. AI recommends a "Refeed Day" (Maintenance Calories) tomorrow.',
+                  icon: 'fa-pizza-slice'
+              });
+          }
+      }
+
+      // 5. Streak Calculation (Existing Logic moved here for consistency)
+      let streakCount = 0;
       if (recentPlans.length > 0) {
-          let streakCount = 0;
           for (let i = 0; i < recentPlans.length; i++) {
              const plan = recentPlans[i];
              const hasActivity = plan.meals.some(m => m.isCompleted);
@@ -168,24 +218,10 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
              }
           }
           setStreak(streakCount);
-
-          const newNotifications: string[] = [];
-          const currentHour = new Date().getHours();
-          if (currentHour >= 12 && currentHour <= 14 && (!todayPlan || !todayPlan.meals.some(m => m.name.includes("Lunch") && m.isCompleted))) {
-             newNotifications.push("🕒 Time for Lunch? Don't forget to log it.");
-          }
-
-          const weeklyDeficit = recentPlans.slice(0, 3).every(p => {
-              const c = p.meals.reduce((acc, m) => m.isCompleted ? acc + m.macros.cal : acc, 0);
-              return c < (profile.daily_calories || 2000) - 400;
-          });
-          if (weeklyDeficit) {
-              newNotifications.push("⚠️ High Deficit Detected: Consider a refeed meal to boost metabolism.");
-          }
-
-          setNotifications(newNotifications);
       }
-  }, [recentPlans, todayPlan]);
+
+      setSmartAlerts(alerts);
+  }, [recentPlans, todayPlan, logs, consumed.cal, totalCalTarget, plan.bmr]);
 
   const fetchDailyPlans = async () => {
     setLoading(true);
@@ -303,6 +339,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
         const historyForAI = recentPlans.filter(p => p.date !== today);
         const { newTarget, contextNote } = calculateZigzagTarget(today);
 
+        // Uses profile preference implicitly if not overridden
         const newPlan = await generateDailyMealPlan(
             profile, plan, today, historyForAI, preferences, dietType, newTarget, contextNote
         );
@@ -375,16 +412,12 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
   };
 
   const DietMealCard: React.FC<{ meal: DietMeal, index: number }> = ({ meal, index }) => {
-      const longPressProps = useLongPress(() => {
-          setDeviationModal({ isOpen: true, type: 'diet', itemIndex: index, itemData: meal });
-      });
-
+      // REMOVED: Long press logic. Now using dedicated buttons.
       return (
         <div 
-            {...longPressProps}
             className={`glass-card rounded-2xl overflow-hidden group transition-all duration-300 relative ${
                 meal.isCompleted ? 'border-green-500/30 bg-green-900/10' : ''
-            } ${longPressProps.className}`}
+            }`}
         >
             <div className={`p-4 border-b flex justify-between items-center ${meal.isCompleted ? 'bg-green-500/10 border-green-500/20' : 'bg-white/5 border-white/5'}`}>
                 <h3 className={`font-bold text-lg flex items-center gap-3 ${meal.isCompleted ? 'text-green-100' : 'text-white'}`}>
@@ -399,8 +432,9 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                 </h3>
                 
                 <div className="flex items-center gap-3">
-                    {/* Explicit Adjust Button for Mobile Accessibility */}
                     <button 
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
                         onClick={(e) => {
                             e.stopPropagation();
                             setDeviationModal({ isOpen: true, type: 'diet', itemIndex: index, itemData: meal });
@@ -411,6 +445,8 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                     </button>
 
                     <button 
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
                         onClick={(e) => {
                             e.stopPropagation(); 
                             toggleMealCompletion(index);
@@ -487,21 +523,40 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
             )}
           </div>
         </div>
-        <button 
-          onClick={onSignOut}
-          className="bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 w-10 h-10 rounded-full flex items-center justify-center transition-all backdrop-blur-md border border-white/5"
-        >
-          <i className="fas fa-power-off text-sm"></i>
-        </button>
+        {/* Removed Sign Out Button - moved to Profile */}
+        <div className="w-10"></div> 
       </div>
 
-      {/* Notifications */}
-      {notifications.length > 0 && (
-          <div className="space-y-2 animate-fade-in">
-              {notifications.map((msg, i) => (
-                  <div key={i} className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl flex items-start gap-3">
-                      <i className="fas fa-bell text-blue-400 mt-1"></i>
-                      <p className="text-xs text-blue-100">{msg}</p>
+      {/* Smart Notifications Area */}
+      {smartAlerts.length > 0 && (
+          <div className="space-y-3 animate-slide-up">
+              {smartAlerts.map((alert) => (
+                  <div 
+                    key={alert.id} 
+                    className={`p-3 rounded-xl flex items-start gap-3 border ${
+                        alert.type === 'critical' ? 'bg-red-500/10 border-red-500/30' :
+                        alert.type === 'warning' ? 'bg-orange-500/10 border-orange-500/30' :
+                        alert.type === 'info' ? 'bg-blue-500/10 border-blue-500/30' :
+                        'bg-green-500/10 border-green-500/30'
+                    }`}
+                  >
+                      <div className={`mt-0.5 w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                          alert.type === 'critical' ? 'bg-red-500 text-white' :
+                          alert.type === 'warning' ? 'bg-orange-500 text-white' :
+                          alert.type === 'info' ? 'bg-blue-500 text-white' :
+                          'bg-green-500 text-white'
+                      }`}>
+                          <i className={`fas ${alert.icon} text-xs`}></i>
+                      </div>
+                      <div>
+                          <h4 className={`text-xs font-bold uppercase tracking-wider ${
+                              alert.type === 'critical' ? 'text-red-400' :
+                              alert.type === 'warning' ? 'text-orange-400' :
+                              alert.type === 'info' ? 'text-blue-400' :
+                              'text-green-400'
+                          }`}>{alert.title}</h4>
+                          <p className="text-sm text-gray-200 leading-tight mt-0.5">{alert.message}</p>
+                      </div>
                   </div>
               ))}
           </div>
@@ -609,50 +664,9 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
 
                 {(!todayPlan || showRegenInput) && (
                     <div className="glass-card p-1 rounded-2xl mb-4 relative overflow-hidden">
-                        <div className="relative flex justify-between z-10">
-                            <button 
-                                onClick={() => setDietType('veg')}
-                                className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all duration-300 ${dietType === 'veg' ? 'text-green-900' : 'text-gray-500'}`}
-                            >
-                                <div className={`text-2xl transition-transform duration-300 ${dietType === 'veg' ? 'scale-125 animate-bounce' : ''}`}>
-                                    <i className="fas fa-carrot"></i>
-                                </div>
-                                <span className="text-[10px] font-black uppercase tracking-wider">Veg</span>
-                            </button>
-
-                            <button 
-                                onClick={() => setDietType('egg')}
-                                className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all duration-300 ${dietType === 'egg' ? 'text-yellow-900' : 'text-gray-500'}`}
-                            >
-                                <div className={`text-2xl transition-transform duration-300 ${dietType === 'egg' ? 'scale-125 rotate-12' : ''}`}>
-                                    <i className="fas fa-egg"></i>
-                                </div>
-                                <span className="text-[10px] font-black uppercase tracking-wider">Egg</span>
-                            </button>
-
-                            <button 
-                                onClick={() => setDietType('non-veg')}
-                                className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all duration-300 ${dietType === 'non-veg' ? 'text-red-900' : 'text-gray-500'}`}
-                            >
-                                <div className={`text-2xl transition-transform duration-300 ${dietType === 'non-veg' ? 'scale-125 pulse' : ''}`}>
-                                    <i className="fas fa-drumstick-bite"></i>
-                                </div>
-                                <span className="text-[10px] font-black uppercase tracking-wider">Non-Veg</span>
-                            </button>
-                        </div>
-                        <div 
-                            className="absolute top-1 bottom-1 w-[32%] bg-gradient-to-br rounded-xl transition-all duration-300 ease-out z-0 shadow-lg"
-                            style={{
-                                left: dietType === 'veg' ? '1%' : dietType === 'egg' ? '34%' : '67%',
-                                background: dietType === 'veg' 
-                                    ? 'linear-gradient(135deg, #4ade80 0%, #22c55e 100%)' 
-                                    : dietType === 'egg' 
-                                    ? 'linear-gradient(135deg, #facc15 0%, #eab308 100%)' 
-                                    : 'linear-gradient(135deg, #f87171 0%, #dc2626 100%)'
-                            }}
-                        >
-                            <div className="absolute top-0 right-0 w-8 h-8 bg-white/20 rounded-full blur-sm -mr-2 -mt-2"></div>
-                            <div className="absolute bottom-0 left-0 w-6 h-6 bg-white/10 rounded-full blur-sm -ml-1 -mb-1"></div>
+                        {/* Duplicate Diet Type Toggle Removed - Managed via Profile now */}
+                        <div className="p-3 text-center text-gray-400 text-xs italic">
+                            Diet Preference: <span className="text-primary font-bold uppercase">{dietType}</span>
                         </div>
                     </div>
                 )}
@@ -667,7 +681,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                         <textarea 
                             value={preferences}
                             onChange={(e) => setPreferences(e.target.value)}
-                            placeholder="e.g. 'I ate 500g Chicken Biryani for lunch, adjust my dinner' OR 'Suggest Vegetarian dinner'..."
+                            placeholder="e.g. 'I ate 500g Chicken Biryani for lunch, adjust my dinner'..."
                             className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-primary outline-none h-24 resize-none mb-3 placeholder-gray-600"
                         />
                         <button 
@@ -691,7 +705,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                             <i className="fas fa-utensils text-4xl text-gray-600"></i>
                         </div>
                         <h3 className="text-xl font-bold text-white mb-2">Kitchen Closed</h3>
-                        <p className="text-gray-500 text-sm mb-6 max-w-xs">No meal plan generated for today yet. Select your diet type and let the AI Chef cook.</p>
+                        <p className="text-gray-500 text-sm mb-6 max-w-xs">No meal plan generated for today yet. Using your {dietType} preference.</p>
                         
                         <div className="w-full mb-4">
                             <input 
@@ -728,8 +742,8 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], o
                 )}
             </div>
         )}
-
-        {/* Workout Tab */}
+        
+        {/* ... (Workout and Overview tabs remain the same) */}
         {activeTab === 'workout' && (
             <div className="space-y-4 animate-slide-up">
                 {!workoutPlan || !workoutPlan.workout ? (
