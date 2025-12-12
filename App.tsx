@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import Library from './components/Library';
 import ProgressTracker from './components/ProgressTracker';
 import CheckInDueModal from './components/CheckInDueModal';
+import ChatInterface from './components/ChatInterface'; // Import Chat
 import { UserProfile, ProgressEntry, ActivityLevel, Goal, Gender, PersonalizedPlan } from './types';
 
 const App: React.FC = () => {
@@ -19,6 +20,9 @@ const App: React.FC = () => {
   // Check-in logic states
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [autoLaunchScanner, setAutoLaunchScanner] = useState(false);
+  
+  // Chat State
+  const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
     // 1. Check active session
@@ -190,7 +194,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-dark text-gray-200 font-sans selection:bg-primary/30 overflow-hidden overscroll-y-contain">
+    <div className="flex flex-col h-[100dvh] bg-dark text-gray-200 font-sans selection:bg-primary/30 overflow-hidden overscroll-y-contain relative">
       
       {/* Background Ambience */}
       <div className="fixed inset-0 pointer-events-none z-0">
@@ -205,10 +209,21 @@ const App: React.FC = () => {
         />
       )}
 
+      {/* Main Chat Interface Overlay */}
+      {showChat && (
+          <div className="fixed inset-0 z-[100] bg-dark animate-fade-in">
+              <ChatInterface 
+                userProfile={profile} 
+                progressLogs={progressLogs} 
+                onClose={() => setShowChat(false)}
+              />
+          </div>
+      )}
+
       <main className="flex-1 overflow-hidden relative z-10 flex flex-col">
         {/* Added webkit-overflow-scrolling for smooth iOS scroll */}
         <div className="flex-1 overflow-y-auto scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
-          {currentTab === 'dashboard' && <Dashboard profile={profile} userId={session.user.id} workoutPlan={workoutPlan} onSignOut={handleSignOut} />}
+          {currentTab === 'dashboard' && <Dashboard profile={profile} userId={session.user.id} workoutPlan={workoutPlan} logs={progressLogs} onSignOut={handleSignOut} />}
           {currentTab === 'library' && <Library />}
           {currentTab === 'progress' && (
             <ProgressTracker 
@@ -221,6 +236,16 @@ const App: React.FC = () => {
           )}
         </div>
       </main>
+
+      {/* Floating Chat Button (Only visible when chat is closed) */}
+      {!showChat && (
+        <button 
+            onClick={() => setShowChat(true)}
+            className="absolute bottom-24 right-6 w-14 h-14 bg-gradient-to-tr from-primary to-yellow-400 rounded-full shadow-2xl shadow-primary/40 flex items-center justify-center z-40 hover:scale-110 transition-transform active:scale-95 border-2 border-white/20"
+        >
+            <i className="fas fa-robot text-dark text-2xl"></i>
+        </button>
+      )}
 
       {/* Glass Bottom Nav */}
       <nav className="glass-heavy h-[80px] flex justify-around items-center px-6 z-50 shrink-0 pb-4 relative">

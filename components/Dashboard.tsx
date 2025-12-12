@@ -1,14 +1,17 @@
 // ... (imports remain the same)
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { UserProfile, MacroPlan, PersonalizedPlan, DailyMealPlanDB, DietMeal } from '../types';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { UserProfile, MacroPlan, PersonalizedPlan, DailyMealPlanDB, DietMeal, ProgressEntry, WeightPrediction } from '../types';
 import { calculatePlan } from './Calculator';
 import { supabase } from '../services/supabaseClient';
 import { generateDailyMealPlan, handleDietDeviation } from '../services/geminiService';
+import { predictWeightTrajectory } from '../services/analyticsService';
+import BarcodeScanner from './BarcodeScanner';
 
 interface Props {
   userId: string;
   profile: UserProfile;
   workoutPlan: PersonalizedPlan | null;
+  logs?: ProgressEntry[]; // Added logs prop for analytics
   onSignOut: () => void;
 }
 
@@ -43,7 +46,7 @@ const useLongPress = (callback: (e: any) => void, ms = 600) => {
     };
 };
 
-const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut }) => {
+const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], onSignOut }) => {
   // Use stored calories from DB if available to maintain "Weekly Budget" consistency
   const plan: MacroPlan = profile.daily_calories 
     ? { ...calculatePlan(profile), calories: profile.daily_calories } 
@@ -58,6 +61,14 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
   const [preferences, setPreferences] = useState('');
   const [showRegenInput, setShowRegenInput] = useState(false);
   const [dietType, setDietType] = useState<DietType>('non-veg');
+  
+  // New Feature States
+  const [streak, setStreak] = useState(0);
+  const [notifications, setNotifications] = useState<string[]>([]);
+  const [showScanner, setShowScanner] = useState(false);
+  
+  // Analytics State
+  const [prediction, setPrediction] = useState<WeightPrediction | null>(null);
 
   // Deviation Modal State
   const [deviationModal, setDeviationModal] = useState<{
@@ -70,7 +81,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
   const [isProcessingDeviation, setIsProcessingDeviation] = useState(false);
 
   // --- DERIVED STATE (REAL-TIME TRACKING) ---
-  // Calculate consumed macros based on CHECKED meals only
   const getConsumedMacros = (currentPlan: DailyMealPlanDB | null) => {
     if (!currentPlan) return { p: 0, c: 0, f: 0, cal: 0 };
     return currentPlan.meals.reduce((acc, meal) => {
@@ -88,10 +98,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
 
   const consumed = getConsumedMacros(todayPlan);
 
-  // Calculate Macro Percentages for Visuals (Consumed vs Target)
   const totalCalTarget = plan.calories || 2000;
-  
-  // Progress percentages (capped at 100 for bar width, but value text can go higher)
   const calPct = Math.min(100, Math.round((consumed.cal / totalCalTarget) * 100));
   const pPct = Math.min(100, Math.round((consumed.p / plan.protein) * 100));
   const cPct = Math.min(100, Math.round((consumed.c / plan.carbs) * 100));
@@ -113,10 +120,52 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
     return 'Good Evening';
   };
 
-  // --- DATA FETCHING ---
+  // --- DATA FETCHING & ANALYTICS ---
   useEffect(() => {
     fetchDailyPlans();
   }, [userId]); 
+
+  // Run Analytics when logs change
+  useEffect(() => {
+      if (logs.length > 0) {
+          // Calculate Prediction
+          const pred = predictWeightTrajectory(logs, plan, undefined); // Pass target if available in future
+          setPrediction(pred);
+      }
+  }, [logs, plan]);
+
+  // --- STREAK & NOTIFICATION LOGIC ---
+  useEffect(() => {
+      if (recentPlans.length > 0) {
+          let streakCount = 0;
+          for (let i = 0; i < recentPlans.length; i++) {
+             const plan = recentPlans[i];
+             const hasActivity = plan.meals.some(m => m.isCompleted);
+             if (hasActivity) {
+                 streakCount++;
+             } else {
+                 if (plan.date !== getTodayDate()) break;
+             }
+          }
+          setStreak(streakCount);
+
+          const newNotifications: string[] = [];
+          const currentHour = new Date().getHours();
+          if (currentHour >= 12 && currentHour <= 14 && (!todayPlan || !todayPlan.meals.some(m => m.name.includes("Lunch") && m.isCompleted))) {
+             newNotifications.push("🕒 Time for Lunch? Don't forget to log it.");
+          }
+
+          const weeklyDeficit = recentPlans.slice(0, 3).every(p => {
+              const c = p.meals.reduce((acc, m) => m.isCompleted ? acc + m.macros.cal : acc, 0);
+              return c < (profile.daily_calories || 2000) - 400;
+          });
+          if (weeklyDeficit) {
+              newNotifications.push("⚠️ High Deficit Detected: Consider a refeed meal to boost metabolism.");
+          }
+
+          setNotifications(newNotifications);
+      }
+  }, [recentPlans, todayPlan]);
 
   const fetchDailyPlans = async () => {
     setLoading(true);
@@ -128,7 +177,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
           .select('*')
           .eq('user_id', userId) 
           .order('date', { ascending: false })
-          .limit(7);
+          .limit(10); 
 
         if (error) throw error;
 
@@ -139,55 +188,54 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
             const todayEntry = validData.find((p: any) => p.date === today);
             setTodayPlan(todayEntry || null);
         }
-    } catch (err) {
-        console.error("Failed to fetch plans", err);
+    } catch (err: any) {
+        console.error("Failed to fetch plans:", err.message || err);
     }
     setLoading(false);
   };
 
+  // ... (rest of the component remains unchanged)
   // --- ACTIONS ---
-
-  // CHECKLIST TOGGLE Logic
   const toggleMealCompletion = async (index: number) => {
     if (!todayPlan) return;
-
-    // 1. Optimistic Update
     const updatedMeals = [...todayPlan.meals];
     updatedMeals[index] = {
         ...updatedMeals[index],
         isCompleted: !updatedMeals[index].isCompleted
     };
-
     const updatedPlan = { ...todayPlan, meals: updatedMeals };
     setTodayPlan(updatedPlan);
 
-    // 2. Persist to DB
     try {
         const { error } = await supabase
             .from('daily_meal_plans')
             .update({ meals: updatedMeals })
             .eq('id', todayPlan.id);
-
         if (error) throw error;
-
-        // Update history cache for stats
         setRecentPlans(prev => [updatedPlan, ...prev.filter(p => p.date !== todayPlan.date)]);
-
     } catch (err) {
         console.error("Failed to update meal status", err);
-        // Revert on error
         setTodayPlan(todayPlan); 
         alert("Failed to save progress. Check connection.");
     }
   };
 
-  // ... (Zigzag Logic - Unchanged)
+  const handleScanSuccess = (foodData: any) => {
+      setShowScanner(false);
+      setDeviationModal({
+          isOpen: true,
+          type: 'diet',
+          itemIndex: -1, 
+          itemData: { name: "Scanned Item", time: "Now" }
+      });
+      setDeviationInput(`I ate ${foodData.name} which has ${foodData.calories} calories (${foodData.protein}g protein, ${foodData.carbs}g carbs). Add this to my plan.`);
+  };
+
   const calculateZigzagTarget = (todayStr: string) => {
     const today = new Date();
     const dayOfWeek = today.getDay(); 
     const daysSinceMonday = (dayOfWeek + 6) % 7; 
     
-    // ZIGZAG CALCULATION: Sum ONLY COMPLETED calories from history
     const weekHistory = recentPlans.filter(p => {
         if (p.date === todayStr) return false;
         const pDate = new Date(p.date);
@@ -203,11 +251,8 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
     const standardDailyTarget = profile.daily_calories || plan.calories;
     let expectedTotal = weekHistory.length * standardDailyTarget;
     
-    // Summing only checked meals for accuracy
     weekHistory.forEach(day => {
         const dayConsumed = day.meals.reduce((sum, m) => m.isCompleted ? sum + m.macros.cal : sum, 0);
-        // Fallback: If no meals are marked completed (old data), maybe assume full day? 
-        // For now, strict adherence: if not checked, not eaten.
         totalConsumed += dayConsumed;
     });
 
@@ -223,7 +268,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
     let contextNote = "";
     if (Math.abs(adjustmentPerDay) > 30) {
          if (adjustmentPerDay > 0) {
-             contextNote = `ALERT: User is currently ${netSurplus} kcal OVER weekly budget (based on checked meals). \nSTRATEGY: Reduce daily target by ${adjustmentPerDay} kcal.`;
+             contextNote = `ALERT: User is currently ${netSurplus} kcal OVER weekly budget. \nSTRATEGY: Reduce daily target by ${adjustmentPerDay} kcal.`;
          } else {
              contextNote = `NOTICE: User is ${Math.abs(netSurplus)} kcal UNDER weekly budget. \nSTRATEGY: Increase daily target (Refeed).`;
          }
@@ -256,7 +301,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
 
         if (upsertError) throw upsertError;
         
-        // Refetch to get ID
         const { data: refreshedData } = await supabase.from('daily_meal_plans').select('*').eq('user_id', userId).eq('date', today).single();
         
         setTodayPlan(refreshedData || newPlan);
@@ -275,10 +319,18 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
     setIsProcessingDeviation(true);
     try {
         if (deviationModal.type === 'diet') {
-            const updatedPlan = await handleDietDeviation(todayPlan, plan, deviationModal.itemIndex, deviationInput);
+            const indexToUpdate = deviationModal.itemIndex === -1 ? todayPlan.meals.length - 1 : deviationModal.itemIndex;
             
-            // Auto-check the meal being deviated/reported
-            updatedPlan.meals[deviationModal.itemIndex].isCompleted = true;
+            let targetIndex = deviationModal.itemIndex;
+            if (targetIndex === -1) {
+                targetIndex = todayPlan.meals.length - 1;
+            }
+
+            const updatedPlan = await handleDietDeviation(todayPlan, plan, targetIndex, deviationInput);
+            
+            if(updatedPlan.meals[targetIndex]) {
+                 updatedPlan.meals[targetIndex].isCompleted = true;
+            }
 
             const { error: upsertError } = await supabase
               .from('daily_meal_plans')
@@ -303,7 +355,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
     }
   };
 
-  // --- COMPONENT: CHECKLIST MEAL CARD ---
   const DietMealCard: React.FC<{ meal: DietMeal, index: number }> = ({ meal, index }) => {
       const longPressProps = useLongPress(() => {
           setDeviationModal({ isOpen: true, type: 'diet', itemIndex: index, itemData: meal });
@@ -316,7 +367,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
                 meal.isCompleted ? 'border-green-500/30 bg-green-900/10' : ''
             } ${longPressProps.className}`}
         >
-            {/* Header / Checkbox Area */}
             <div className={`p-4 border-b flex justify-between items-center ${meal.isCompleted ? 'bg-green-500/10 border-green-500/20' : 'bg-white/5 border-white/5'}`}>
                 <h3 className={`font-bold text-lg flex items-center gap-3 ${meal.isCompleted ? 'text-green-100' : 'text-white'}`}>
                     <div className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold ${
@@ -329,10 +379,9 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
                     </span>
                 </h3>
                 
-                {/* Custom Checkbox */}
                 <button 
                     onClick={(e) => {
-                        e.stopPropagation(); // Prevent Long Press trigger
+                        e.stopPropagation(); 
                         toggleMealCompletion(index);
                     }}
                     className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
@@ -344,8 +393,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
                     {meal.isCompleted && <i className="fas fa-check text-white text-sm"></i>}
                 </button>
             </div>
-
-            {/* Content */}
             <div className={`p-5 transition-opacity duration-300 ${meal.isCompleted ? 'opacity-60 grayscale-[0.3]' : 'opacity-100'}`}>
                 <div className="flex justify-between items-start mb-4">
                      <ul className="space-y-2 flex-1">
@@ -360,9 +407,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
                         {meal.time}
                     </span>
                 </div>
-
                 <div className="flex gap-2 pt-3 border-t border-white/5">
-                    {/* Compact Macros */}
                     <div className="flex-1 grid grid-cols-3 gap-1">
                         <div className="bg-black/20 rounded p-1 text-center">
                             <div className="text-[9px] text-gray-500 uppercase">Pro</div>
@@ -383,8 +428,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
                     </div>
                 </div>
             </div>
-            
-            {/* Completion Overlay Flash (Optional, nice touch) */}
             {meal.isCompleted && (
                 <div className="absolute inset-0 pointer-events-none bg-green-500/5 mix-blend-overlay"></div>
             )}
@@ -394,12 +437,23 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
 
   // --- RENDER ---
   return (
-    <div className="p-4 space-y-6 pb-28 max-w-2xl mx-auto">
+    <div className="p-4 space-y-6 pb-28 max-w-2xl mx-auto relative">
+      {/* Scanner Modal */}
+      {showScanner && <BarcodeScanner onScanSuccess={handleScanSuccess} onClose={() => setShowScanner(false)} />}
+        
       {/* Header Section */}
       <div className="flex justify-between items-center animate-fade-in">
         <div>
           <p className="text-gray-400 text-sm font-medium">{getTimeGreeting()},</p>
-          <h1 className="text-3xl font-black text-white tracking-tight">{profile.name}</h1>
+          <div className="flex items-baseline gap-2">
+            <h1 className="text-3xl font-black text-white tracking-tight">{profile.name}</h1>
+            {streak > 1 && (
+                <div className="flex items-center gap-1 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full">
+                    <i className="fas fa-fire text-orange-500 text-xs animate-pulse"></i>
+                    <span className="text-orange-500 font-bold text-xs">{streak} Days</span>
+                </div>
+            )}
+          </div>
         </div>
         <button 
           onClick={onSignOut}
@@ -409,7 +463,19 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
         </button>
       </div>
 
-      {/* Hero Macro Card - UPDATED TO SHOW CONSUMED vs TARGET */}
+      {/* Notifications */}
+      {notifications.length > 0 && (
+          <div className="space-y-2 animate-fade-in">
+              {notifications.map((msg, i) => (
+                  <div key={i} className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl flex items-start gap-3">
+                      <i className="fas fa-bell text-blue-400 mt-1"></i>
+                      <p className="text-xs text-blue-100">{msg}</p>
+                  </div>
+              ))}
+          </div>
+      )}
+
+      {/* Hero Macro Card */}
       <div className="relative overflow-hidden rounded-3xl p-6 shadow-2xl animate-slide-up bg-[#0f121e] border border-white/5">
         <div className="absolute top-[-10px] right-[-10px] bg-[#3f2e22] text-[#f97316] text-[10px] font-bold px-6 py-4 rounded-full border border-white/5 flex items-end justify-center">
             <span className="translate-y-[-2px] translate-x-[-5px]">{profile.goal}</span>
@@ -426,7 +492,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
                     <span className="text-xl text-gray-400 font-bold">{totalCalTarget}</span>
                     <span className="text-xs font-bold text-orange-500 uppercase ml-1">KCAL</span>
                 </div>
-                {/* Daily Progress Bar */}
                 <div className="w-full bg-gray-800 h-1.5 rounded-full mt-2 overflow-hidden">
                     <div 
                         className={`h-full rounded-full transition-all duration-700 ease-out ${consumed.cal > totalCalTarget ? 'bg-red-500' : 'bg-primary'}`} 
@@ -435,9 +500,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
                 </div>
             </div>
 
-            {/* Macro Bars */}
             <div className="flex gap-4">
-                {/* Protein */}
                 <div className="flex-1 bg-[#161b2c] p-3 rounded-xl border border-white/5 relative overflow-hidden group">
                     <div className="flex justify-between items-end mb-1">
                         <p className="text-[9px] text-gray-500 uppercase font-bold">Protein</p>
@@ -448,7 +511,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
                     </div>
                 </div>
 
-                {/* Carbs */}
                 <div className="flex-1 bg-[#161b2c] p-3 rounded-xl border border-white/5 relative overflow-hidden group">
                      <div className="flex justify-between items-end mb-1">
                         <p className="text-[9px] text-gray-500 uppercase font-bold">Carbs</p>
@@ -459,7 +521,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
                     </div>
                 </div>
 
-                {/* Fats */}
                 <div className="flex-1 bg-[#161b2c] p-3 rounded-xl border border-white/5 relative overflow-hidden group">
                      <div className="flex justify-between items-end mb-1">
                         <p className="text-[9px] text-gray-500 uppercase font-bold">Fats</p>
@@ -473,7 +534,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
         </div>
       </div>
 
-      {/* Modern Tabs */}
+      {/* Tabs */}
       <div className="bg-black/40 p-1.5 rounded-2xl border border-white/5 flex relative backdrop-blur-sm">
         {['diet', 'workout', 'overview'].map((tab) => (
             <button 
@@ -495,21 +556,28 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
       <div className="min-h-[400px]">
         {activeTab === 'diet' && (
             <div className="space-y-4 animate-slide-up">
-                {/* Date & Actions */}
                 <div className="flex justify-between items-center px-1">
                     <span className="text-white font-bold text-lg">{getTodayDate()}</span>
-                    {todayPlan && !showRegenInput && (
-                        <div className="text-xs text-gray-500 italic flex items-center gap-2">
-                             <i className="fas fa-check-square text-primary"></i> Check meals to track calories
-                        </div>
-                    )}
+                    <div className="flex gap-2">
+                        {todayPlan && (
+                            <button 
+                                onClick={() => setShowScanner(true)}
+                                className="bg-white/10 hover:bg-white/20 text-white w-8 h-8 rounded-full flex items-center justify-center transition-all border border-white/10"
+                            >
+                                <i className="fas fa-barcode text-xs"></i>
+                            </button>
+                        )}
+                        {todayPlan && !showRegenInput && (
+                            <div className="text-xs text-gray-500 italic flex items-center gap-2">
+                                <i className="fas fa-check-square text-primary"></i> Track
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                {/* Diet Selection Slider - Visible when no plan or editing */}
                 {(!todayPlan || showRegenInput) && (
                     <div className="glass-card p-1 rounded-2xl mb-4 relative overflow-hidden">
                         <div className="relative flex justify-between z-10">
-                            {/* Veg Option */}
                             <button 
                                 onClick={() => setDietType('veg')}
                                 className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all duration-300 ${dietType === 'veg' ? 'text-green-900' : 'text-gray-500'}`}
@@ -520,7 +588,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
                                 <span className="text-[10px] font-black uppercase tracking-wider">Veg</span>
                             </button>
 
-                            {/* Egg Option */}
                             <button 
                                 onClick={() => setDietType('egg')}
                                 className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all duration-300 ${dietType === 'egg' ? 'text-yellow-900' : 'text-gray-500'}`}
@@ -531,7 +598,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
                                 <span className="text-[10px] font-black uppercase tracking-wider">Egg</span>
                             </button>
 
-                            {/* Non-Veg Option */}
                             <button 
                                 onClick={() => setDietType('non-veg')}
                                 className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all duration-300 ${dietType === 'non-veg' ? 'text-red-900' : 'text-gray-500'}`}
@@ -542,8 +608,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
                                 <span className="text-[10px] font-black uppercase tracking-wider">Non-Veg</span>
                             </button>
                         </div>
-
-                        {/* Sliding Background */}
                         <div 
                             className="absolute top-1 bottom-1 w-[32%] bg-gradient-to-br rounded-xl transition-all duration-300 ease-out z-0 shadow-lg"
                             style={{
@@ -561,7 +625,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
                     </div>
                 )}
 
-                {/* Regeneration Input Panel */}
                 {todayPlan && showRegenInput && (
                     <div className="glass-card p-4 rounded-2xl animate-fade-in">
                         <div className="flex justify-between items-center mb-3">
@@ -634,7 +697,7 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
             </div>
         )}
 
-        {/* ... (Workout and Overview tabs remain similar) ... */}
+        {/* Workout Tab */}
         {activeTab === 'workout' && (
             <div className="space-y-4 animate-slide-up">
                 {!workoutPlan || !workoutPlan.workout ? (
@@ -675,16 +738,111 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
             </div>
         )}
 
+        {/* Overview & Analytics Tab */}
         {activeTab === 'overview' && (
-             <div className="animate-slide-up">
-                 {/* Weekly Budget Summary */}
+             <div className="animate-slide-up space-y-6">
+                 {/* 1. Predictive Analytics Card */}
+                 <div className="glass-card p-6 rounded-2xl border border-primary/20 bg-gradient-to-br from-secondary to-dark relative overflow-hidden">
+                    <div className="flex justify-between items-start mb-4">
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                            <i className="fas fa-brain text-primary animate-pulse"></i> AI Prediction
+                        </h3>
+                        {prediction && (
+                            <span className={`text-xs px-2 py-1 rounded border ${prediction.confidenceScore > 70 ? 'border-green-500 text-green-400 bg-green-900/20' : 'border-yellow-500 text-yellow-400 bg-yellow-900/20'}`}>
+                                {prediction.confidenceScore}% Confidence
+                            </span>
+                        )}
+                    </div>
+                    
+                    {!prediction || prediction.confidenceScore < 10 ? (
+                        <div className="text-center py-6 text-gray-500">
+                            <i className="fas fa-chart-line text-4xl mb-3 opacity-30"></i>
+                            <p className="text-xs">Log at least 2 weight entries to unlock predictions.</p>
+                        </div>
+                    ) : (
+                        <div>
+                             <div className="grid grid-cols-2 gap-4 mb-6">
+                                 <div className="bg-black/30 p-3 rounded-xl border border-white/5">
+                                     <div className="text-xs text-gray-400 mb-1">In 4 Weeks</div>
+                                     <div className="text-2xl font-black text-white">{prediction.projectedWeightIn4Weeks} <span className="text-xs font-medium text-gray-500">kg</span></div>
+                                 </div>
+                                 <div className="bg-black/30 p-3 rounded-xl border border-white/5">
+                                     <div className="text-xs text-gray-400 mb-1">Weekly Trend</div>
+                                     <div className={`text-2xl font-black ${prediction.trendAnalysis.weeklyRateOfChange < 0 ? 'text-green-400' : 'text-yellow-400'}`}>
+                                         {prediction.trendAnalysis.weeklyRateOfChange > 0 ? '+' : ''}{prediction.trendAnalysis.weeklyRateOfChange} <span className="text-xs font-medium text-gray-500">kg</span>
+                                     </div>
+                                 </div>
+                             </div>
+
+                             {/* SVG Trend Graph */}
+                             <div className="h-32 w-full mb-4 relative">
+                                {(() => {
+                                    const data = prediction.graphData;
+                                    const maxW = Math.max(...data.map(d => d.weight)) + 1;
+                                    const minW = Math.min(...data.map(d => d.weight)) - 1;
+                                    const range = maxW - minW;
+                                    const stepX = 100 / (data.length - 1);
+                                    
+                                    // Generate points
+                                    const points = data.map((d, i) => {
+                                        const x = i * stepX;
+                                        const y = 100 - ((d.weight - minW) / range) * 100;
+                                        return `${x},${y}`;
+                                    }).join(' ');
+
+                                    return (
+                                        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
+                                            {/* Grid Lines */}
+                                            <line x1="0" y1="25" x2="100" y2="25" stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" />
+                                            <line x1="0" y1="50" x2="100" y2="50" stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" />
+                                            <line x1="0" y1="75" x2="100" y2="75" stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" />
+                                            
+                                            {/* Trend Line */}
+                                            <polyline 
+                                                points={points} 
+                                                fill="none" 
+                                                stroke="#FFD700" 
+                                                strokeWidth="2" 
+                                                strokeDasharray="4,1" // Dashed effect for futuristic look
+                                                className="drop-shadow-lg"
+                                            />
+                                            
+                                            {/* Data Points */}
+                                            {data.map((d, i) => {
+                                                const x = i * stepX;
+                                                const y = 100 - ((d.weight - minW) / range) * 100;
+                                                return (
+                                                    <g key={i}>
+                                                        <circle cx={x} cy={y} r={d.isProjection ? "2" : "3"} fill={d.isProjection ? "#fff" : "#FFD700"} opacity={d.isProjection ? 0.5 : 1} />
+                                                        {/* Labels for first, split, last */}
+                                                        {(i === 0 || i === data.length - 1 || (!d.isProjection && data[i+1]?.isProjection)) && (
+                                                            <text x={x} y={y - 8} fontSize="5" fill="white" textAnchor="middle">{d.weight}</text>
+                                                        )}
+                                                    </g>
+                                                )
+                                            })}
+                                        </svg>
+                                    );
+                                })()}
+                             </div>
+
+                             <div className="bg-white/5 p-3 rounded-lg border border-white/5">
+                                 <p className="text-xs text-gray-300 leading-relaxed">
+                                     <i className={`fas fa-info-circle mr-2 ${prediction.trendAnalysis.isHealthyPace ? 'text-green-400' : 'text-red-400'}`}></i>
+                                     {prediction.trendAnalysis.recommendation}
+                                 </p>
+                             </div>
+                        </div>
+                    )}
+                 </div>
+
+                 {/* 2. Weekly Budget Summary */}
                  <div className="glass-card p-4 rounded-xl mb-6 border border-primary/20 bg-primary/5">
                     <h3 className="text-primary font-bold mb-3 text-sm uppercase tracking-wider flex items-center gap-2">
                         <i className="fas fa-wallet"></i> Weekly Budget (Checked Meals)
                     </h3>
                     
                     {(() => {
-                        // Calculate total consumed from completed meals in history
                         const weeklyLimit = profile.weekly_calories || (plan.calories * 7);
                         const weeklyConsumed = recentPlans.reduce((acc, p) => 
                             acc + p.meals.reduce((mAcc, m) => m.isCompleted ? mAcc + m.macros.cal : mAcc, 0), 
@@ -714,10 +872,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
                             </>
                         );
                     })()}
-
-                    <p className="text-[10px] text-gray-500 mt-2 text-center">
-                        Tracks only meals marked as checked. Adjustments (Zigzag) are automatic.
-                    </p>
                  </div>
 
                  <h3 className="text-white font-bold mb-4 text-sm uppercase tracking-wider opacity-70">Recent History</h3>
@@ -747,7 +901,6 @@ const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, onSignOut })
         )}
       </div>
 
-      {/* --- DEVIATION MODAL --- */}
       {deviationModal.isOpen && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[70] p-4 backdrop-blur-sm animate-fade-in">
           <div className="glass-card w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl relative border-primary/30">

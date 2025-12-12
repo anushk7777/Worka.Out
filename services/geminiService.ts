@@ -114,15 +114,24 @@ export const analyzeBodyComposition = async (
   try {
     const parts: any[] = [{ text: prompt }];
 
+    // Helper to get mime type and data
+    const processImage = (base64: string) => {
+        const matches = base64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+            return { mimeType: matches[1], data: matches[2] };
+        }
+        return { mimeType: "image/jpeg", data: base64 }; // Fallback
+    };
+
     // Add Front Image
-    const cleanFront = frontImageBase64.split(',')[1] || frontImageBase64;
-    parts.push({ inlineData: { mimeType: "image/jpeg", data: cleanFront } });
+    const frontImg = processImage(frontImageBase64);
+    parts.push({ inlineData: { mimeType: frontImg.mimeType, data: frontImg.data } });
     parts.push({ text: "Image 1: Front View" });
 
     // Add Back Image if available
     if (backImageBase64) {
-        const cleanBack = backImageBase64.split(',')[1] || backImageBase64;
-        parts.push({ inlineData: { mimeType: "image/jpeg", data: cleanBack } });
+        const backImg = processImage(backImageBase64);
+        parts.push({ inlineData: { mimeType: backImg.mimeType, data: backImg.data } });
         parts.push({ text: "Image 2: Back View" });
     } else {
         parts.push({ text: "Note: Only Front View provided. Estimate based on single angle." });

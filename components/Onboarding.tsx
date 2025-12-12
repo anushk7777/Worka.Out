@@ -39,6 +39,15 @@ const Onboarding: React.FC<Props> = ({ onComplete }) => {
     setScanFile(file); 
   };
 
+  // Helper for ISO Date
+  const getTodayISO = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const handleFinalize = async () => {
     setLoading(true);
     setLoadingText("Initializing your journey...");
@@ -97,7 +106,7 @@ const Onboarding: React.FC<Props> = ({ onComplete }) => {
       // 3. Create Baseline Log
       const logData = {
         user_id: user.id,
-        date: new Date().toLocaleDateString(),
+        date: getTodayISO(), // FIXED: Uses YYYY-MM-DD
         weight: Number(finalProfile.weight),
         body_fat: finalProfile.bodyFat ? Number(finalProfile.bodyFat) : null,
         photo_url: photoUrl,

@@ -5,7 +5,7 @@ import { generateTrainerResponse } from '../services/geminiService';
 interface Props {
   userProfile: UserProfile;
   progressLogs: ProgressEntry[];
-  onClose: () => void;
+  onClose: () => void; // Added close prop
 }
 
 const ChatInterface: React.FC<Props> = ({ userProfile, progressLogs, onClose }) => {
@@ -68,10 +68,7 @@ const ChatInterface: React.FC<Props> = ({ userProfile, progressLogs, onClose }) 
         <h2 className="text-lg font-bold text-white flex items-center">
           <i className="fas fa-robot mr-2 text-primary"></i> Master Trainer AI
         </h2>
-        <button 
-            onClick={onClose} 
-            className="text-gray-400 hover:text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
-        >
+        <button onClick={onClose} className="text-gray-400 hover:text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors">
             <i className="fas fa-times"></i>
         </button>
       </div>

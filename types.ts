@@ -50,6 +50,22 @@ export interface MacroPlan {
   calculationMethod: string;
 }
 
+export interface WeightPrediction {
+  projectedWeightIn4Weeks: number;
+  projectedBodyFatIn4Weeks: number;
+  confidenceScore: number; // 0 to 100
+  trendAnalysis: {
+    weeklyRateOfChange: number; // kg per week
+    isHealthyPace: boolean;
+    recommendation: string;
+  };
+  milestoneDate?: {
+    targetWeight: number;
+    estimatedDate: string;
+  };
+  graphData: { date: string; weight: number; isProjection: boolean }[];
+}
+
 export interface DietMeal {
   name: string;
   time: string;

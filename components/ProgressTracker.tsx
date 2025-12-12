@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { ProgressEntry, UserProfile } from '../types';
 import { supabase } from '../services/supabaseClient';
 import BodyFatAnalyzer from './BodyFatAnalyzer';
+import ComparisonSlider from './ComparisonSlider';
 import { generateWorkoutSplit } from '../services/geminiService';
 import { calculatePlan } from './Calculator';
 
 interface Props {
   logs: ProgressEntry[];
   onAddLog: (log: ProgressEntry) => void;
-  profile: UserProfile; // Updated from currentWeight to full profile for Analyzer context
+  profile: UserProfile; 
   launchScanner?: boolean;
   onScannerLaunched?: () => void;
 }
@@ -24,8 +25,12 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
   const [regenerating, setRegenerating] = useState(false);
   const [showAnalyzer, setShowAnalyzer] = useState(false);
   
-  // Tab State: 'quick' for weight only, 'scan' for full re-evaluation
-  const [logMode, setLogMode] = useState<'quick' | 'scan'>('quick');
+  // Tab State: 'quick', 'scan', 'compare'
+  const [logMode, setLogMode] = useState<'quick' | 'scan' | 'compare'>('quick');
+
+  // Comparison State
+  const [compareIdx1, setCompareIdx1] = useState<number>(0); // Index in sortedLogs
+  const [compareIdx2, setCompareIdx2] = useState<number>(1);
 
   // Handle auto-launch from parent
   useEffect(() => {
@@ -48,6 +53,14 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
     reader.readAsDataURL(file);
 
     setLogMode('scan'); // Ensure we are in scan mode to see results
+  };
+
+  const getTodayISO = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const handleLog = async () => {
@@ -82,7 +95,7 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
       // 2. Insert Log
       const logData = {
         user_id: user.id,
-        date: new Date().toLocaleDateString(),
+        date: getTodayISO(), // FIXED: Uses YYYY-MM-DD
         weight: Number(weight),
         body_fat: bodyFat ? Number(bodyFat) : null,
         photo_url: photoUrl,
@@ -180,6 +193,7 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
   };
 
   const sortedLogs = [...logs].reverse(); 
+  const logsWithPhotos = sortedLogs.filter(l => l.photo_url);
 
   const getTrendIcon = (current: number, previous: number) => {
     if (current < previous) return <i className="fas fa-arrow-down text-green-500"></i>;
@@ -209,12 +223,18 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
                 onClick={() => setLogMode('scan')}
                 className={`flex-1 py-4 text-sm font-bold transition-all ${logMode === 'scan' ? 'bg-secondary text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
             >
-                <i className="fas fa-microchip mr-2"></i> AI Body Scan
+                <i className="fas fa-microchip mr-2"></i> Scan
+            </button>
+            <button 
+                onClick={() => setLogMode('compare')}
+                className={`flex-1 py-4 text-sm font-bold transition-all ${logMode === 'compare' ? 'bg-secondary text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+            >
+                <i className="fas fa-columns mr-2"></i> Compare
             </button>
         </div>
 
         <div className="p-6">
-            {logMode === 'quick' ? (
+            {logMode === 'quick' && (
                  /* --- QUICK LOG MODE --- */
                  <div className="animate-fade-in">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -249,7 +269,9 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
                         </div>
                     </div>
                  </div>
-            ) : (
+            )}
+            
+            {logMode === 'scan' && (
                 /* --- AI SCAN MODE --- */
                 <div className="animate-fade-in flex flex-col items-center justify-center space-y-4">
                     {!photoFile ? (
@@ -314,8 +336,56 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
                 </div>
             )}
 
-            {/* Common Save Button - Show if Manual OR if Scan is Complete */}
-            {(logMode === 'quick' || (logMode === 'scan' && photoFile)) && (
+            {logMode === 'compare' && (
+                /* --- COMPARISON MODE --- */
+                <div className="animate-fade-in space-y-6">
+                    {logsWithPhotos.length < 2 ? (
+                        <div className="text-center py-8 text-gray-400">
+                            <i className="fas fa-images text-4xl mb-3 opacity-50"></i>
+                            <p>You need at least 2 logs with photos to use comparison mode.</p>
+                        </div>
+                    ) : (
+                        <>
+                            <ComparisonSlider 
+                                beforeImage={logsWithPhotos[compareIdx2]?.photo_url || ''}
+                                afterImage={logsWithPhotos[compareIdx1]?.photo_url || ''}
+                                beforeDate={logsWithPhotos[compareIdx2]?.date || 'Old'}
+                                afterDate={logsWithPhotos[compareIdx1]?.date || 'New'}
+                            />
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs text-primary font-bold uppercase">Base Photo</label>
+                                    <select 
+                                        value={compareIdx2}
+                                        onChange={(e) => setCompareIdx2(parseInt(e.target.value))}
+                                        className="w-full bg-dark border border-gray-600 rounded-lg p-2 text-xs text-white mt-1"
+                                    >
+                                        {logsWithPhotos.map((l, idx) => (
+                                            <option key={l.id} value={idx}>{l.date} ({l.weight}kg)</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-primary font-bold uppercase">Current Photo</label>
+                                    <select 
+                                        value={compareIdx1}
+                                        onChange={(e) => setCompareIdx1(parseInt(e.target.value))}
+                                        className="w-full bg-dark border border-gray-600 rounded-lg p-2 text-xs text-white mt-1"
+                                    >
+                                        {logsWithPhotos.map((l, idx) => (
+                                            <option key={l.id} value={idx}>{l.date} ({l.weight}kg)</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
+
+            {/* Common Save Button - Show if Manual OR if Scan is Complete (NOT in compare mode) */}
+            {logMode !== 'compare' && (logMode === 'quick' || (logMode === 'scan' && photoFile)) && (
                 <button 
                     onClick={handleLog}
                     disabled={loading || regenerating}
@@ -343,38 +413,40 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
         />
       )}
 
-      {/* History List */}
-      <div className="space-y-4 pt-4">
-        <h3 className="text-white font-bold ml-1 text-sm uppercase tracking-wider opacity-70">Recent History</h3>
-        {sortedLogs.length === 0 ? (
-          <div className="text-gray-500 text-center py-8">No logs yet. Start tracking!</div>
-        ) : (
-          sortedLogs.map((log, index) => {
-            const prevLog = sortedLogs[index + 1];
-            return (
-              <div key={log.id} className="bg-secondary p-4 rounded-xl border border-gray-700 flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="text-gray-400 text-xs mb-1">{log.date}</div>
-                  <div className="text-white font-bold text-lg flex items-center gap-2">
-                    {log.weight} kg
-                    {prevLog && getTrendIcon(log.weight, prevLog.weight)}
-                  </div>
-                  {log.bodyFat && <div className="text-xs text-primary font-bold mt-1">{log.bodyFat}% Body Fat</div>}
-                  {log.notes && <div className="text-xs text-gray-500 mt-2 italic border-l-2 border-gray-600 pl-2">"{log.notes}"</div>}
-                </div>
-                {log.photo_url && (
-                  <a href={log.photo_url} target="_blank" rel="noopener noreferrer" className="ml-4 w-14 h-14 bg-dark rounded-lg overflow-hidden border border-gray-600 flex-shrink-0 relative group">
-                    <img src={log.photo_url} alt="Progress" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <i className="fas fa-expand text-white text-xs"></i>
+      {/* History List - Only show if not in compare mode */}
+      {logMode !== 'compare' && (
+          <div className="space-y-4 pt-4">
+            <h3 className="text-white font-bold ml-1 text-sm uppercase tracking-wider opacity-70">Recent History</h3>
+            {sortedLogs.length === 0 ? (
+              <div className="text-gray-500 text-center py-8">No logs yet. Start tracking!</div>
+            ) : (
+              sortedLogs.map((log, index) => {
+                const prevLog = sortedLogs[index + 1];
+                return (
+                  <div key={log.id} className="bg-secondary p-4 rounded-xl border border-gray-700 flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="text-gray-400 text-xs mb-1">{log.date}</div>
+                      <div className="text-white font-bold text-lg flex items-center gap-2">
+                        {log.weight} kg
+                        {prevLog && getTrendIcon(log.weight, prevLog.weight)}
+                      </div>
+                      {log.bodyFat && <div className="text-xs text-primary font-bold mt-1">{log.bodyFat}% Body Fat</div>}
+                      {log.notes && <div className="text-xs text-gray-500 mt-2 italic border-l-2 border-gray-600 pl-2">"{log.notes}"</div>}
                     </div>
-                  </a>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
+                    {log.photo_url && (
+                      <a href={log.photo_url} target="_blank" rel="noopener noreferrer" className="ml-4 w-14 h-14 bg-dark rounded-lg overflow-hidden border border-gray-600 flex-shrink-0 relative group">
+                        <img src={log.photo_url} alt="Progress" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <i className="fas fa-expand text-white text-xs"></i>
+                        </div>
+                      </a>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+      )}
     </div>
   );
 };
