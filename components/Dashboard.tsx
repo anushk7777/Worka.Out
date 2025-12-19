@@ -6,7 +6,7 @@ import { supabase } from '../services/supabaseClient';
 import { generateDailyMealPlan, handleDietDeviation } from '../services/geminiService';
 import { predictWeightTrajectory } from '../services/analyticsService';
 import BarcodeScanner from './BarcodeScanner';
-import { FOOD_DATABASE } from '../constants'; 
+import { FOOD_DATABASE, MOTIVATIONAL_QUOTES } from '../constants'; 
 
 interface Props {
   userId: string;
@@ -19,6 +19,113 @@ interface Props {
 }
 
 type DietType = 'veg' | 'egg' | 'non-veg';
+
+// --- SUB-COMPONENTS FOR ANIMATIONS ---
+
+// 1. Sunrise Component (AM Mode) - Darker, higher contrast version
+const SunriseComponent = () => (
+  <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#0c1220]">
+    {/* Deep Atmospheric Base */}
+    <div className="absolute inset-0 bg-gradient-to-b from-[#0F172A] via-[#1E1B4B] to-[#311313] opacity-80"></div>
+    
+    {/* Rising Sun Glow - Lowered opacity and darker hues for text contrast */}
+    <div className="absolute -bottom-10 -left-10 w-56 h-56 bg-gradient-to-tr from-orange-600 via-red-500 to-transparent rounded-full blur-[60px] animate-sunrise opacity-60"></div>
+    
+    {/* Horizon Light */}
+    <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-orange-900/40 to-transparent"></div>
+    
+    {/* Text Protection Gradient (Top Down) */}
+    <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/10"></div>
+  </div>
+);
+
+// 2. Moon Phase Component (PM Mode) - Deep Night
+const MoonPhaseComponent = () => (
+  <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#050b14]">
+    <div className="absolute inset-0 bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#1e1b4b]"></div>
+    
+    {/* Moon Glow */}
+    <div className="absolute top-4 right-4 w-32 h-32 bg-indigo-500/10 rounded-full blur-[40px]"></div>
+    
+    {/* Moon Orb */}
+    <div className="absolute top-[-20px] right-[-20px] w-40 h-40 bg-gray-300 rounded-full shadow-[0_0_50px_rgba(199,210,254,0.15)] animate-moonrise opacity-90">
+       <div className="absolute inset-0 rounded-full bg-gradient-to-br from-transparent to-black/20"></div>
+       {/* Craters */}
+       <div className="absolute top-10 left-8 w-6 h-6 bg-[#94a3b8] rounded-full opacity-30"></div>
+       <div className="absolute top-20 left-20 w-8 h-8 bg-[#94a3b8] rounded-full opacity-20"></div>
+       <div className="absolute bottom-10 right-10 w-4 h-4 bg-[#94a3b8] rounded-full opacity-30"></div>
+    </div>
+    
+    {/* Stars */}
+    <div className="absolute top-10 left-10 w-0.5 h-0.5 bg-white rounded-full animate-twinkle shadow-[0_0_4px_white]"></div>
+    <div className="absolute top-24 left-1/3 w-1 h-1 bg-white/70 rounded-full animate-twinkle delay-75"></div>
+    <div className="absolute bottom-1/3 right-1/2 w-0.5 h-0.5 bg-white/50 rounded-full animate-twinkle delay-150"></div>
+    
+    {/* Text Protection */}
+    <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/20 to-transparent"></div>
+  </div>
+);
+
+// 3. Typewriter Text Component
+const TypewriterText = ({ text }: { text: string }) => {
+  const [displayedText, setDisplayedText] = useState('');
+  const index = useRef(0);
+
+  useEffect(() => {
+    index.current = 0;
+    setDisplayedText('');
+    
+    const intervalId = setInterval(() => {
+      if (index.current < text.length) {
+        setDisplayedText((prev) => prev + text.charAt(index.current));
+        index.current++;
+      } else {
+        clearInterval(intervalId);
+      }
+    }, 40); // Typing speed
+
+    return () => clearInterval(intervalId);
+  }, [text]);
+
+  return (
+    <div className="mt-5 relative pl-4 border-l-[3px] border-primary/50 min-h-[3.5rem] bg-black/10 rounded-r-xl py-1 backdrop-blur-[2px]">
+      <p className="text-[13px] text-gray-100 font-medium leading-relaxed tracking-wide drop-shadow-sm font-sans">
+        {displayedText}
+        <span className="inline-block w-1.5 h-4 bg-primary ml-1 animate-blink align-sub shadow-[0_0_8px_rgba(255,215,0,0.6)]"></span>
+      </p>
+    </div>
+  );
+};
+
+// Performance Wrapper for lazy loading and animations
+const FadeInItem: React.FC<{ children: React.ReactNode, delay?: number }> = ({ children, delay = 0 }) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1, rootMargin: '50px' }
+    );
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div 
+        ref={ref} 
+        className={`transition-all duration-700 ease-spring transform will-change-transform ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`} 
+        style={{ transitionDelay: `${delay}ms` }}
+    >
+      {children}
+    </div>
+  );
+};
 
 export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], onSignOut, onNavigate, refreshTrigger }) => {
   // 1. Calculate Plan Source of Truth
@@ -36,7 +143,18 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
   const [showRegenModal, setShowRegenModal] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [visualHaptic, setVisualHaptic] = useState<{type: 'success' | 'error', id: string} | null>(null);
   
+  // Greeting & Quote States
+  const [motivationalQuote, setMotivationalQuote] = useState('');
+  
+  // Pull Interaction States
+  const [pullY, setPullY] = useState(0);
+  const [pullUpY, setPullUpY] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const touchStartY = useRef(0);
+  const [showQuickStats, setShowQuickStats] = useState(false);
+
   // Regeneration Inputs
   const [regenPreferences, setRegenPreferences] = useState('');
   const [regenDietType, setRegenDietType] = useState<DietType>((profile.dietary_preference as DietType) || 'non-veg');
@@ -56,6 +174,13 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
   const [prediction, setPrediction] = useState<WeightPrediction | null>(null);
 
   // --- Effects ---
+
+  // Initialize Quote & Time
+  useEffect(() => {
+    // Pick a random quote on mount
+    const random = MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)];
+    setMotivationalQuote(random);
+  }, []);
 
   // Sync state when profile updates
   useEffect(() => {
@@ -106,10 +231,13 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
     return `${year}-${month}-${day}`;
   };
 
-  const getTimeGreeting = () => {
-    const hours = new Date().getHours();
-    if (hours < 12) return 'Good Morning';
-    if (hours < 18) return 'Good Afternoon';
+  // Determine Greeting & AM/PM
+  const currentHour = new Date().getHours();
+  const isAM = currentHour >= 5 && currentHour < 18;
+  
+  const getGreetingText = () => {
+    if (currentHour < 12) return 'Good Morning';
+    if (currentHour < 18) return 'Good Afternoon';
     return 'Good Evening';
   };
 
@@ -127,6 +255,11 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
           setPrediction(pred);
       }
   }, [logs, plan]);
+
+  const triggerVisualHaptic = (type: 'success' | 'error', id: string) => {
+      setVisualHaptic({ type, id });
+      setTimeout(() => setVisualHaptic(null), 600);
+  };
 
   const fetchDailyPlans = async () => {
     setLoading(true);
@@ -146,20 +279,64 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
 
   const toggleMealCompletion = async (index: number) => {
     if (!todayPlan || !todayPlan.meals) return;
+    
+    // Optimistic Update
     const updatedMeals = [...todayPlan.meals];
-    updatedMeals[index] = { ...updatedMeals[index], isCompleted: !updatedMeals[index].isCompleted };
+    const isNowCompleted = !updatedMeals[index].isCompleted;
+    updatedMeals[index] = { ...updatedMeals[index], isCompleted: isNowCompleted };
     const updatedPlan = { ...todayPlan, meals: updatedMeals };
     setTodayPlan(updatedPlan);
+
+    // Visual Haptic
+    if (isNowCompleted) {
+        triggerVisualHaptic('success', `meal-${index}`);
+    }
+
     try {
         await supabase.from('daily_meal_plans').update({ meals: updatedMeals }).eq('id', todayPlan.id);
         setRecentPlans(prev => [updatedPlan, ...(prev || []).filter(p => p.date !== todayPlan.date)]);
-    } catch (err) { setTodayPlan(todayPlan); alert("Failed to save progress."); }
+    } catch (err) { 
+        setTodayPlan(todayPlan); 
+        triggerVisualHaptic('error', `meal-${index}`);
+        alert("Failed to save progress."); 
+    }
   };
 
-  const handleScanSuccess = (foodData: any) => {
-      setShowScanner(false);
-      setAddFoodInput(foodData.name);
-      setAddFoodModal(true);
+  // --- TOUCH HANDLERS FOR PULL INTERACTIONS ---
+  const handleTouchStart = (e: React.TouchEvent) => {
+      touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+      const touchY = e.touches[0].clientY;
+      const diff = touchY - touchStartY.current;
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      
+      // Pull to Refresh (Only when at top)
+      if (scrollTop <= 0 && diff > 0) {
+          setPullY(Math.min(diff * 0.4, 120)); // Damping
+      }
+
+      // Pull Up for Stats (Only when at bottom)
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = document.documentElement.clientHeight;
+      if (scrollTop + clientHeight >= scrollHeight - 20 && diff < 0) {
+          setPullUpY(Math.min(Math.abs(diff) * 0.4, 150));
+      }
+  };
+
+  const handleTouchEnd = () => {
+      if (pullY > 80) {
+          // Trigger Refresh
+          setIsSyncing(true);
+          fetchDailyPlans();
+      }
+      if (pullUpY > 100) {
+          // Trigger Quick Stats
+          setShowQuickStats(true);
+      }
+      setPullY(0);
+      setPullUpY(0);
   };
 
   // --- REGENERATION LOGIC ---
@@ -198,8 +375,10 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
         setTodayPlan(newPlan);
         setRecentPlans(prev => [newPlan, ...(prev || []).filter(p => p.date !== today)]);
         setRegenPreferences(''); // Clear input
+        triggerVisualHaptic('success', 'regen-btn');
         
     } catch (err: any) { 
+        triggerVisualHaptic('error', 'regen-btn');
         alert(`Failed: ${getErrorMessage(err)}`); 
     } finally { 
         setGenerating(false); 
@@ -230,19 +409,32 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
         // Close Modal
         setEditingMeal(null);
         setEditInstruction('');
+        triggerVisualHaptic('success', `meal-${editingMeal.index}`);
+
     } catch (e: any) {
+        triggerVisualHaptic('error', 'edit-modal');
         alert("Failed to edit meal: " + getErrorMessage(e));
     } finally {
         setIsEditingMeal(false);
     }
   };
 
+  const handleScanSuccess = (foodData: any) => {
+      setShowScanner(false);
+      setAddFoodInput(foodData.name);
+      setAddFoodModal(true);
+  };
+  
   const handleSelectFood = (item: FoodItem) => { setSelectedFoodItem(item); setInputQuantity(item.base_amount.toString()); };
 
   const handleConfirmQuantity = async () => {
       if (!todayPlan || !selectedFoodItem || !todayPlan.meals) return;
       const qty = parseFloat(inputQuantity);
-      if (isNaN(qty) || qty <= 0) { alert("Invalid quantity."); return; }
+      if (isNaN(qty) || qty <= 0) { 
+          triggerVisualHaptic('error', 'add-food');
+          alert("Invalid quantity."); 
+          return; 
+      }
       try {
           const ratio = qty / selectedFoodItem.base_amount;
           const newMeal: DietMeal = {
@@ -266,17 +458,52 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
           setTodayPlan(updatedPlan);
           setRecentPlans(prev => [updatedPlan, ...(prev || []).filter(p => p.date !== todayPlan.date)]);
           setAddFoodModal(false); setAddFoodInput(''); setSearchResults([]); setSelectedFoodItem(null);
+          triggerVisualHaptic('success', 'add-btn');
       } catch (err: any) { alert(`Failed: ${getErrorMessage(err)}`); } 
   };
 
   return (
-    <div className="space-y-8">
+    <div 
+        ref={containerRef} 
+        className="space-y-8" 
+        onTouchStart={handleTouchStart} 
+        onTouchMove={handleTouchMove} 
+        onTouchEnd={handleTouchEnd}
+    >
+      {/* Pull to Refresh Visual Indicator */}
+      <div 
+        className="fixed top-0 left-0 right-0 flex justify-center z-50 pointer-events-none transition-transform duration-75 ease-out"
+        style={{ transform: `translateY(${pullY - 60}px)`, opacity: pullY > 10 ? 1 : 0 }}
+      >
+        <div className="bg-primary text-black w-10 h-10 rounded-full flex items-center justify-center shadow-lg shadow-primary/30">
+            <i className={`fas fa-sync-alt ${pullY > 80 ? 'animate-spin' : ''}`} style={{ transform: `rotate(${pullY * 3}deg)` }}></i>
+        </div>
+      </div>
+
+      {/* Quick Stats Bottom Sheet (Triggered by Pull Up) */}
+      <div className={`fixed bottom-0 left-0 right-0 bg-secondary border-t border-white/10 rounded-t-[40px] z-[60] transition-all duration-500 p-8 shadow-2xl ${showQuickStats ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
+         <div className="flex justify-between items-center mb-6">
+            <h3 className="text-xl font-black text-white">Daily Summary</h3>
+            <button onClick={() => setShowQuickStats(false)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center"><i className="fas fa-chevron-down"></i></button>
+         </div>
+         <div className="grid grid-cols-2 gap-4">
+            <div className="bg-dark p-4 rounded-2xl">
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest">Goal</p>
+                <p className="text-2xl font-black text-white">{totalCalTarget} <span className="text-sm text-gray-600">kcal</span></p>
+            </div>
+            <div className="bg-dark p-4 rounded-2xl">
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest">Done</p>
+                <p className={`text-2xl font-black ${consumed.cal > totalCalTarget ? 'text-red-400' : 'text-green-400'}`}>{consumed.cal} <span className="text-sm text-gray-600">kcal</span></p>
+            </div>
+         </div>
+      </div>
+
       {showScanner && <BarcodeScanner onScanSuccess={handleScanSuccess} onClose={() => setShowScanner(false)} />}
       
       {/* Regeneration Modal */}
       {showRegenModal && (
         <div className="fixed inset-0 bg-dark/95 backdrop-blur-3xl z-[80] flex items-center justify-center p-6 animate-fade-in">
-             <div className="glass-card w-full max-w-sm rounded-[40px] p-8 border-primary/20 relative z-10 animate-scale-in">
+             <div id="regen-modal" className={`glass-card w-full max-w-sm rounded-[40px] p-8 border-primary/20 relative z-10 animate-scale-in ${visualHaptic?.id === 'regen-btn' && visualHaptic.type === 'error' ? 'animate-shake' : ''}`}>
                  <div className="flex justify-between items-center mb-6">
                     <h3 className="text-white font-black text-lg tracking-tight">Regenerate Protocol</h3>
                     <button onClick={() => setShowRegenModal(false)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:text-white"><i className="fas fa-times"></i></button>
@@ -324,7 +551,7 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                     <button 
                          onClick={handleGenerateToday}
                          disabled={generating}
-                         className="w-full bg-white text-dark font-black py-5 rounded-2xl text-[11px] uppercase tracking-[0.3em] shadow-xl haptic-press active:scale-95 transition-transform flex items-center justify-center gap-3"
+                         className={`w-full bg-white text-dark font-black py-5 rounded-2xl text-[11px] uppercase tracking-[0.3em] shadow-xl haptic-press active:scale-95 transition-transform flex items-center justify-center gap-3 ${visualHaptic?.id === 'regen-btn' && visualHaptic.type === 'success' ? 'animate-pulse-double ring-4 ring-green-500/50' : ''}`}
                     >
                         {generating ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-bolt"></i>}
                         Generate New Plan
@@ -337,7 +564,7 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
       {/* Edit Meal Modal */}
       {editingMeal && (
           <div className="fixed inset-0 bg-dark/95 backdrop-blur-3xl z-[90] flex items-center justify-center p-6 animate-fade-in">
-              <div className="glass-card w-full max-w-sm rounded-[40px] p-8 border-white/10 relative z-10 animate-scale-in shadow-2xl">
+              <div id="edit-modal" className={`glass-card w-full max-w-sm rounded-[40px] p-8 border-white/10 relative z-10 animate-scale-in shadow-2xl ${visualHaptic?.id === 'edit-modal' && visualHaptic.type === 'error' ? 'animate-shake' : ''}`}>
                  <div className="flex justify-between items-center mb-6">
                     <div>
                         <h3 className="text-white font-black text-lg tracking-tight">Modify Segment</h3>
@@ -378,14 +605,29 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
           </div>
       )}
 
-      <header className="flex justify-between items-end mb-4 px-1">
-        <div>
-          <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.3em] mb-1">{getTimeGreeting()}</p>
-          <h1 className="text-5xl font-black text-white tracking-tighter drop-shadow-md leading-none">{profile.name.split(' ')[0]}</h1>
+      {/* --- NEW HEADER IMPLEMENTATION WITH AM/PM ANIMATIONS --- */}
+      <header className="relative mb-8 p-6 overflow-hidden rounded-[32px] glass-card border border-white/10 group">
+        {/* Ambient Background Layer */}
+        {isAM ? <SunriseComponent /> : <MoonPhaseComponent />}
+
+        {/* Content Layer */}
+        <div className="relative z-10">
+            <div className="flex justify-between items-start">
+                <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-primary/80 mb-2 flex items-center gap-2">
+                        {isAM ? <i className="fas fa-sun text-orange-400"></i> : <i className="fas fa-moon text-indigo-300"></i>}
+                        {getGreetingText()}
+                    </p>
+                    <h1 className="text-4xl font-black text-white tracking-tighter drop-shadow-md">{profile.name.split(' ')[0]}</h1>
+                </div>
+                <button onClick={() => onNavigate('profile')} className="w-14 h-14 rounded-[24px] bg-white/[0.05] border border-white/10 flex items-center justify-center transition-all haptic-press hover:bg-white/[0.1] shadow-lg inner-glow">
+                    <i className="fas fa-fingerprint text-primary text-2xl"></i>
+                </button>
+            </div>
+            
+            {/* Typewriter Quote */}
+            <TypewriterText text={motivationalQuote} />
         </div>
-        <button onClick={() => onNavigate('profile')} className="w-14 h-14 rounded-[24px] bg-white/[0.03] border border-white/10 flex items-center justify-center transition-all haptic-press hover:bg-white/[0.08] shadow-lg inner-glow">
-          <i className="fas fa-fingerprint text-primary text-2xl"></i>
-        </button>
       </header>
 
       {/* High-Fidelity Liquid Status Panel */}
@@ -446,23 +688,25 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
         {activeTab === 'diet' && (
             <div className="space-y-6 animate-slide-up">
                 {(!todayPlan && !isSyncing) ? (
-                    <div className="glass-card p-14 rounded-[48px] text-center border border-white/10 overflow-hidden relative group">
-                        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-blue-500/10 opacity-30 pointer-events-none"></div>
-                        <div className="w-28 h-28 bg-white/[0.03] rounded-[32px] flex items-center justify-center mb-10 mx-auto border border-white/10 group-hover:scale-110 group-hover:rotate-6 transition-all duration-1000 inner-glow">
-                             <i className="fas fa-microchip text-5xl text-primary/50"></i>
+                    <FadeInItem>
+                        <div className="glass-card p-14 rounded-[48px] text-center border border-white/10 overflow-hidden relative group">
+                            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-blue-500/10 opacity-30 pointer-events-none"></div>
+                            <div className="w-28 h-28 bg-white/[0.03] rounded-[32px] flex items-center justify-center mb-10 mx-auto border border-white/10 group-hover:scale-110 group-hover:rotate-6 transition-all duration-1000 inner-glow">
+                                <i className="fas fa-microchip text-5xl text-primary/50"></i>
+                            </div>
+                            <h2 className="text-3xl font-black text-white mb-4 tracking-tight">System Idle</h2>
+                            <p className="text-gray-400 text-sm mb-12 leading-relaxed font-medium mx-auto max-w-[280px]">
+                                Neural processing of today's intake data required. Initialize optimization protocol.
+                            </p>
+                            <button 
+                                onClick={() => setShowRegenModal(true)} 
+                                disabled={generating} 
+                                className="bg-white text-dark font-black py-6 px-16 rounded-[28px] shadow-[0_25px_50px_-12px_rgba(255,255,255,0.2)] flex items-center justify-center gap-4 haptic-press transition-all hover:translate-y-[-2px] mx-auto tracking-[0.2em] uppercase text-[11px]"
+                            >
+                                <i className="fas fa-bolt-lightning"></i> Initialize Protocol
+                            </button>
                         </div>
-                        <h2 className="text-3xl font-black text-white mb-4 tracking-tight">System Idle</h2>
-                        <p className="text-gray-400 text-sm mb-12 leading-relaxed font-medium mx-auto max-w-[280px]">
-                            Neural processing of today's intake data required. Initialize optimization protocol.
-                        </p>
-                        <button 
-                            onClick={() => setShowRegenModal(true)} 
-                            disabled={generating} 
-                            className="bg-white text-dark font-black py-6 px-16 rounded-[28px] shadow-[0_25px_50px_-12px_rgba(255,255,255,0.2)] flex items-center justify-center gap-4 haptic-press transition-all hover:translate-y-[-2px] mx-auto tracking-[0.2em] uppercase text-[11px]"
-                        >
-                            <i className="fas fa-bolt-lightning"></i> Initialize Protocol
-                        </button>
-                    </div>
+                    </FadeInItem>
                 ) : (
                     <div className={`space-y-5 ${generating ? 'opacity-40 pointer-events-none grayscale' : ''}`}>
                          {/* PROMINENT REGENERATION COMMAND CENTER */}
@@ -480,66 +724,68 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                          </div>
 
                          {(todayPlan?.meals || []).map((meal, idx) => (
-                            <div 
-                              key={idx} 
-                              onClick={() => toggleMealCompletion(idx)}
-                              className={`glass-card rounded-[40px] overflow-hidden group relative transition-all duration-700 haptic-press cursor-pointer animate-slide-up ${meal.isCompleted ? 'border-green-500/30 opacity-60' : 'hover:border-white/20'}`}
-                              style={{ animationDelay: `${idx * 80}ms` }}
-                            >
-                                <div className={`p-7 border-b border-white/5 flex justify-between items-center ${meal.isCompleted ? 'bg-green-500/[0.03]' : 'bg-white/[0.01]'}`}>
-                                    <div className="flex items-center gap-5">
-                                        <div className={`w-10 h-10 rounded-[18px] flex items-center justify-center text-[12px] font-black transition-all duration-700 ${meal.isCompleted ? 'bg-green-500 text-white rotate-[360deg]' : 'bg-primary text-dark'}`}>{idx + 1}</div>
-                                        <div>
-                                            <h3 className={`font-black text-xl tracking-tight leading-none mb-1.5 ${meal.isCompleted ? 'text-gray-500 line-through' : 'text-white'}`}>{meal.name}</h3>
-                                            <div className="flex items-center gap-2">
-                                                <i className="fas fa-clock text-[9px] text-gray-600"></i>
-                                                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{meal.time}</p>
+                            <FadeInItem key={idx} delay={idx * 50}>
+                                <div 
+                                    onClick={() => toggleMealCompletion(idx)}
+                                    className={`glass-card rounded-[40px] overflow-hidden group relative transition-all duration-500 ease-spring haptic-press cursor-pointer border border-white/5 ${meal.isCompleted ? 'border-green-500/30 opacity-60' : 'hover:border-white/20'} ${visualHaptic?.id === `meal-${idx}` && visualHaptic.type === 'success' ? 'animate-pulse-double ring-2 ring-green-400' : ''}`}
+                                >
+                                    <div className={`p-7 border-b border-white/5 flex justify-between items-center ${meal.isCompleted ? 'bg-green-500/[0.03]' : 'bg-white/[0.01]'}`}>
+                                        <div className="flex items-center gap-5">
+                                            <div className={`w-10 h-10 rounded-[18px] flex items-center justify-center text-[12px] font-black transition-all duration-700 ${meal.isCompleted ? 'bg-green-500 text-white rotate-[360deg]' : 'bg-primary text-dark'}`}>{idx + 1}</div>
+                                            <div>
+                                                <h3 className={`font-black text-xl tracking-tight leading-none mb-1.5 ${meal.isCompleted ? 'text-gray-500 line-through' : 'text-white'}`}>{meal.name}</h3>
+                                                <div className="flex items-center gap-2">
+                                                    <i className="fas fa-clock text-[9px] text-gray-600"></i>
+                                                    <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{meal.time}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-3">
+                                            {/* EDIT BUTTON */}
+                                            {!meal.isCompleted && (
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); setEditingMeal({index: idx, name: meal.name}); setEditInstruction(''); }}
+                                                    className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center border border-white/5 transition-colors active:scale-90"
+                                                >
+                                                    <i className="fas fa-pen text-xs"></i>
+                                                </button>
+                                            )}
+
+                                            <div className={`w-12 h-12 rounded-[20px] border-2 flex items-center justify-center transition-all duration-700 ${meal.isCompleted ? 'bg-green-500 border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]' : 'border-white/10 group-hover:border-white/30'}`}>
+                                                {meal.isCompleted && <i className="fas fa-check text-white text-lg"></i>}
                                             </div>
                                         </div>
                                     </div>
-                                    
-                                    <div className="flex items-center gap-3">
-                                        {/* EDIT BUTTON */}
-                                        {!meal.isCompleted && (
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); setEditingMeal({index: idx, name: meal.name}); setEditInstruction(''); }}
-                                                className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center border border-white/5 transition-colors active:scale-90"
-                                            >
-                                                <i className="fas fa-pen text-xs"></i>
-                                            </button>
-                                        )}
-
-                                        <div className={`w-12 h-12 rounded-[20px] border-2 flex items-center justify-center transition-all duration-700 ${meal.isCompleted ? 'bg-green-500 border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]' : 'border-white/10 group-hover:border-white/30'}`}>
-                                            {meal.isCompleted && <i className="fas fa-check text-white text-lg"></i>}
+                                    <div className="p-7">
+                                        <ul className="space-y-2.5 text-[15px] text-gray-400 font-medium pl-1">
+                                            {(meal.items || []).map((it, i) => (
+                                                <li key={i} className="flex items-start gap-4">
+                                                    <div className="w-1.5 h-1.5 bg-primary/40 rounded-full mt-2 shrink-0"></div>
+                                                    <span className={meal.isCompleted ? 'opacity-50' : ''}>{it}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        <div className="mt-8 flex gap-6 pt-6 border-t border-white/5 px-2">
+                                            <div className="flex flex-col"><span className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">PRO</span><span className="text-sm font-black text-blue-400">{meal.macros.p}g</span></div>
+                                            <div className="flex flex-col"><span className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">CAR</span><span className="text-sm font-black text-green-400">{meal.macros.c}g</span></div>
+                                            <div className="flex flex-col"><span className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">FAT</span><span className="text-sm font-black text-orange-400">{meal.macros.f}g</span></div>
+                                            <div className="ml-auto flex flex-col items-end"><span className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">TOTAL</span><span className="text-sm font-black text-white">{meal.macros.cal}k</span></div>
                                         </div>
                                     </div>
+                                    {meal.isCompleted && <div className="absolute inset-0 bg-green-500/5 pointer-events-none"></div>}
                                 </div>
-                                <div className="p-7">
-                                    <ul className="space-y-2.5 text-[15px] text-gray-400 font-medium pl-1">
-                                        {(meal.items || []).map((it, i) => (
-                                            <li key={i} className="flex items-start gap-4">
-                                                <div className="w-1.5 h-1.5 bg-primary/40 rounded-full mt-2 shrink-0"></div>
-                                                <span className={meal.isCompleted ? 'opacity-50' : ''}>{it}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                    <div className="mt-8 flex gap-6 pt-6 border-t border-white/5 px-2">
-                                        <div className="flex flex-col"><span className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">PRO</span><span className="text-sm font-black text-blue-400">{meal.macros.p}g</span></div>
-                                        <div className="flex flex-col"><span className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">CAR</span><span className="text-sm font-black text-green-400">{meal.macros.c}g</span></div>
-                                        <div className="flex flex-col"><span className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">FAT</span><span className="text-sm font-black text-orange-400">{meal.macros.f}g</span></div>
-                                        <div className="ml-auto flex flex-col items-end"><span className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">TOTAL</span><span className="text-sm font-black text-white">{meal.macros.cal}k</span></div>
-                                    </div>
-                                </div>
-                                {meal.isCompleted && <div className="absolute inset-0 bg-green-500/5 pointer-events-none"></div>}
-                            </div>
+                            </FadeInItem>
                          ))}
                          
-                         <button onClick={() => { setAddFoodModal(true); setAddFoodInput(''); }} className="w-full py-8 rounded-[40px] border-2 border-dashed border-white/10 hover:border-primary/40 text-gray-500 hover:text-white flex items-center justify-center gap-4 group bg-black/30 transition-all haptic-press">
-                             <div className="w-10 h-10 rounded-full bg-white/[0.03] flex items-center justify-center group-hover:bg-primary group-hover:text-dark transition-all">
-                                <i className="fas fa-plus-circle text-xl"></i>
-                             </div>
-                             <span className="font-black text-[12px] uppercase tracking-[0.3em]">Add Intake Fragment</span>
-                         </button>
+                         <FadeInItem delay={200}>
+                            <button onClick={() => { setAddFoodModal(true); setAddFoodInput(''); }} className="w-full py-8 rounded-[40px] border-2 border-dashed border-white/10 hover:border-primary/40 text-gray-500 hover:text-white flex items-center justify-center gap-4 group bg-black/30 transition-all haptic-press">
+                                <div className="w-10 h-10 rounded-full bg-white/[0.03] flex items-center justify-center group-hover:bg-primary group-hover:text-dark transition-all">
+                                    <i className="fas fa-plus-circle text-xl"></i>
+                                </div>
+                                <span className="font-black text-[12px] uppercase tracking-[0.3em]">Add Intake Fragment</span>
+                            </button>
+                         </FadeInItem>
                     </div>
                 )}
             </div>
@@ -549,29 +795,31 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
             <div className="space-y-6 animate-slide-up">
                 {workoutPlan && Array.isArray(workoutPlan.workout) ? (
                     workoutPlan.workout.map((day, i) => (
-                        <div key={i} className="glass-card rounded-[42px] overflow-hidden border-white/10 hover:border-white/20 transition-all duration-700 animate-slide-up" style={{ animationDelay: `${i * 100}ms` }}>
-                            <div className="p-7 bg-white/[0.03] border-b border-white/5 flex justify-between items-center">
-                                <h3 className="font-black text-white text-2xl tracking-tighter leading-none">{day.day}</h3>
-                                <span className="text-[10px] bg-primary text-dark px-4 py-1.5 rounded-full font-black uppercase tracking-[0.15em] border border-white/20 shadow-lg">{day.focus}</span>
-                            </div>
-                            <div className="p-7 space-y-6">
-                                {(day.exercises || []).map((ex, j) => (
-                                    <div key={j} className="flex justify-between items-start gap-6 group">
-                                        <div className="flex-1">
-                                            <p className="text-white font-black text-lg leading-tight group-hover:text-primary transition-colors">{ex.name}</p>
-                                            {ex.notes && <p className="text-[11px] text-gray-500 mt-2 font-medium leading-relaxed bg-white/[0.02] p-2 rounded-lg">{ex.notes}</p>}
-                                        </div>
-                                        <div className="text-right shrink-0">
-                                            <div className="glass-liquid px-4 py-2.5 rounded-[20px] border-white/5 shadow-inner">
-                                                <span className="text-[12px] font-black font-mono text-gray-400 tabular-nums">
-                                                    {ex.sets} <span className="text-primary/60 mx-1">×</span> {ex.reps}
-                                                </span>
+                        <FadeInItem key={i} delay={i * 100}>
+                            <div className="glass-card rounded-[42px] overflow-hidden border-white/10 hover:border-white/20 transition-all duration-700">
+                                <div className="p-7 bg-white/[0.03] border-b border-white/5 flex justify-between items-center">
+                                    <h3 className="font-black text-white text-2xl tracking-tighter leading-none">{day.day}</h3>
+                                    <span className="text-[10px] bg-primary text-dark px-4 py-1.5 rounded-full font-black uppercase tracking-[0.15em] border border-white/20 shadow-lg">{day.focus}</span>
+                                </div>
+                                <div className="p-7 space-y-6">
+                                    {(day.exercises || []).map((ex, j) => (
+                                        <div key={j} className="flex justify-between items-start gap-6 group">
+                                            <div className="flex-1">
+                                                <p className="text-white font-black text-lg leading-tight group-hover:text-primary transition-colors">{ex.name}</p>
+                                                {ex.notes && <p className="text-[11px] text-gray-500 mt-2 font-medium leading-relaxed bg-white/[0.02] p-2 rounded-lg">{ex.notes}</p>}
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <div className="glass-liquid px-4 py-2.5 rounded-[20px] border-white/5 shadow-inner">
+                                                    <span className="text-[12px] font-black font-mono text-gray-400 tabular-nums">
+                                                        {ex.sets} <span className="text-primary/60 mx-1">×</span> {ex.reps}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        </FadeInItem>
                     ))
                 ) : (
                     <div className="text-center py-24 glass-card rounded-[48px] border-white/5 opacity-40">
@@ -585,47 +833,49 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
         {activeTab === 'overview' && (
             <div className="space-y-8 animate-slide-up">
                 {prediction ? (
-                    <div className="glass-card p-10 rounded-[48px] relative overflow-hidden group border-white/15">
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-accent/15 rounded-full blur-[110px] pointer-events-none -mr-20 -mt-20 animate-pulse-slow"></div>
-                        
-                        <div className="flex items-center gap-4 mb-10">
-                          <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center">
-                             <i className="fas fa-project-diagram text-accent"></i>
-                          </div>
-                          <h3 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.3em]">Trajectory Projection</h3>
-                        </div>
-                        
-                        <div className="flex items-baseline gap-4 mb-2">
-                            <span className="text-8xl font-black text-white tracking-tighter tabular-nums drop-shadow-lg">{prediction.projectedWeightIn4Weeks}</span>
-                            <span className="text-2xl text-gray-600 font-black tracking-tighter uppercase">KG</span>
-                        </div>
-                        <p className="text-sm text-accent font-black uppercase tracking-[0.2em] mb-12">4-Week System State</p>
-                        
-                        <div className="space-y-8">
-                            <div className="bg-black/60 p-7 rounded-[36px] border border-white/10 inner-glow shadow-inner">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div className="flex flex-col">
-                                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1">Mass Velocity</span>
-                                        <span className="text-white font-black text-lg tabular-nums">0.82 <span className="text-xs text-gray-600 tracking-normal">x-factor</span></span>
-                                    </div>
-                                    <span className={`text-[10px] font-black uppercase px-4 py-2 rounded-2xl border shadow-lg ${prediction.trendAnalysis?.isHealthyPace ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'}`}>
-                                        {prediction.trendAnalysis?.weeklyRateOfChange > 0 ? '+' : ''}{prediction.trendAnalysis?.weeklyRateOfChange} kg / week
-                                    </span>
-                                </div>
-                                <div className="h-3 w-full bg-white/[0.05] rounded-full overflow-hidden shadow-inner p-[2px]">
-                                    <div className={`h-full rounded-full bg-accent transition-all duration-1500 ease-liquid shadow-[0_0_20px_rgba(56,189,248,0.4)] relative`} style={{width: '78%'}}>
-                                        <div className="absolute inset-0 bg-white/20 blur-[1px] h-[30%] rounded-full"></div>
-                                    </div>
-                                </div>
+                    <FadeInItem>
+                        <div className="glass-card p-10 rounded-[48px] relative overflow-hidden group border-white/15">
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-accent/15 rounded-full blur-[110px] pointer-events-none -mr-20 -mt-20 animate-pulse-slow"></div>
+                            
+                            <div className="flex items-center gap-4 mb-10">
+                            <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center">
+                                <i className="fas fa-project-diagram text-accent"></i>
+                            </div>
+                            <h3 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.3em]">Trajectory Projection</h3>
                             </div>
                             
-                            <div className="glass-liquid p-6 rounded-[32px] border-accent/20 relative group-hover:border-accent/40 transition-colors duration-700">
-                                <p className="text-sm text-gray-300 leading-relaxed font-medium italic">
-                                    "{prediction.trendAnalysis?.recommendation}"
-                                </p>
+                            <div className="flex items-baseline gap-4 mb-2">
+                                <span className="text-8xl font-black text-white tracking-tighter tabular-nums drop-shadow-lg">{prediction.projectedWeightIn4Weeks}</span>
+                                <span className="text-2xl text-gray-600 font-black tracking-tighter uppercase">KG</span>
+                            </div>
+                            <p className="text-sm text-accent font-black uppercase tracking-[0.2em] mb-12">4-Week System State</p>
+                            
+                            <div className="space-y-8">
+                                <div className="bg-black/60 p-7 rounded-[36px] border border-white/10 inner-glow shadow-inner">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1">Mass Velocity</span>
+                                            <span className="text-white font-black text-lg tabular-nums">0.82 <span className="text-xs text-gray-600 tracking-normal">x-factor</span></span>
+                                        </div>
+                                        <span className={`text-[10px] font-black uppercase px-4 py-2 rounded-2xl border shadow-lg ${prediction.trendAnalysis?.isHealthyPace ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'}`}>
+                                            {prediction.trendAnalysis?.weeklyRateOfChange > 0 ? '+' : ''}{prediction.trendAnalysis?.weeklyRateOfChange} kg / week
+                                        </span>
+                                    </div>
+                                    <div className="h-3 w-full bg-white/[0.05] rounded-full overflow-hidden shadow-inner p-[2px]">
+                                        <div className={`h-full rounded-full bg-accent transition-all duration-1500 ease-liquid shadow-[0_0_20px_rgba(56,189,248,0.4)] relative`} style={{width: '78%'}}>
+                                            <div className="absolute inset-0 bg-white/20 blur-[1px] h-[30%] rounded-full"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="glass-liquid p-6 rounded-[32px] border-accent/20 relative group-hover:border-accent/40 transition-colors duration-700">
+                                    <p className="text-sm text-gray-300 leading-relaxed font-medium italic">
+                                        "{prediction.trendAnalysis?.recommendation}"
+                                    </p>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </FadeInItem>
                 ) : (
                     <div className="text-center py-32 glass-card rounded-[48px] border-white/5">
                         <div className="relative inline-block mb-8">

@@ -20,6 +20,19 @@ You are the "MealMan AI", an elite fitness expert specializing in nutrition and 
     *   Empathetic but strict about results.
 `;
 
+export const MOTIVATIONAL_QUOTES = [
+  "Discipline is doing what needs to be done, even if you don't want to do it.",
+  "The only bad workout is the one that didn't happen.",
+  "Success starts with self-discipline.",
+  "Your body can stand almost anything. It’s your mind that you have to convince.",
+  "Action is the foundational key to all success.",
+  "Don’t count the days, make the days count.",
+  "Suffer the pain of discipline, or suffer the pain of regret.",
+  "Consistency is what transforms average into excellence.",
+  "Motivation gets you going, but discipline keeps you growing.",
+  "The hard part isn't getting your body in shape. The hard part is getting your mind in shape."
+];
+
 export const RECIPES: Recipe[] = [
   // ... (Keeping existing recipes)
   {

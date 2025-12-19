@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
 import Auth from './Auth';
 import Onboarding from './Onboarding';
@@ -16,7 +16,6 @@ const App: React.FC = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [workoutPlan, setWorkoutPlan] = useState<PersonalizedPlan | null>(null);
   const [progressLogs, setProgressLogs] = useState<ProgressEntry[]>([]);
-  // CHANGED: Replaced 'library' with 'supplements'
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'supplements' | 'progress' | 'profile'>('dashboard');
   const [loading, setLoading] = useState(true);
   
@@ -29,6 +28,9 @@ const App: React.FC = () => {
   
   // Chat State
   const [showChat, setShowChat] = useState(false);
+
+  // Gesture State
+  const touchStart = useRef<{x: number, y: number} | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -136,6 +138,39 @@ const App: React.FC = () => {
     setTimeout(() => setAutoLaunchScanner(true), 100);
   };
 
+  // --- Gesture Navigation Logic ---
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStart.current) return;
+    const touchEnd = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+    
+    const xDiff = touchStart.current.x - touchEnd.x;
+    const yDiff = touchStart.current.y - touchEnd.y;
+
+    // Check for horizontal swipe vs vertical scroll
+    if (Math.abs(xDiff) > Math.abs(yDiff) && Math.abs(xDiff) > 50) {
+        const isLeftEdge = touchStart.current.x < 40;
+        const isRightEdge = touchStart.current.x > window.innerWidth - 40;
+
+        // Navigation Order
+        const tabs: Array<typeof currentTab> = ['dashboard', 'supplements', 'progress', 'profile'];
+        const idx = tabs.indexOf(currentTab);
+
+        // Swipe Left (<-) : Next Tab (if started from Right Edge)
+        if (xDiff > 0 && isRightEdge) {
+            if (idx < tabs.length - 1) setCurrentTab(tabs[idx + 1]);
+        }
+        // Swipe Right (->) : Prev Tab (if started from Left Edge)
+        else if (xDiff < 0 && isLeftEdge) {
+            if (idx > 0) setCurrentTab(tabs[idx - 1]);
+        }
+    }
+    touchStart.current = null;
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-dark flex flex-col items-center justify-center z-[9999]">
@@ -151,13 +186,16 @@ const App: React.FC = () => {
   if (!session) return <Auth />;
   if (!profile) return (
       <div className="fixed inset-0 bg-dark overflow-y-auto overflow-x-hidden">
-        {/* Added the required onSignOut prop to fix the TypeScript error */}
         <Onboarding onComplete={(p) => { setProfile(p); fetchUserData(session.user.id); }} onSignOut={handleSignOut} />
       </div>
   );
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-dark text-gray-200 font-sans overflow-hidden relative selection:bg-primary/30">
+    <div 
+        className="flex flex-col h-[100dvh] bg-dark text-gray-200 font-sans overflow-hidden relative selection:bg-primary/30"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+    >
       
       {/* Background Ambience */}
       <div className="fixed inset-0 pointer-events-none z-0">
@@ -187,7 +225,6 @@ const App: React.FC = () => {
                 refreshTrigger={planVersion}
              />
           )}
-          {/* UPDATED: SupplementAdvisor is now the exclusive view for this tab */}
           {currentTab === 'supplements' && (
              <SupplementAdvisor 
                 profile={profile}
@@ -239,7 +276,6 @@ const App: React.FC = () => {
           <span className={`text-[9px] font-bold tracking-widest transition-colors duration-300 ${currentTab === 'progress' ? 'text-primary' : 'text-gray-500'}`}>LOG</span>
         </button>
 
-        {/* CHANGED: Replaced Library Button with Supplements Button */}
         <button 
           onClick={() => setCurrentTab('supplements')}
           className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
