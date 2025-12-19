@@ -128,7 +128,14 @@ export const predictWeightTrajectory = (
       : trend7d.slope;
 
   const combinedR2 = (trend7d.r2 + trend28d.r2) / 2;
-  const confidenceScore = Math.round(combinedR2 * 100);
+  
+  // ISSUE 1: Confidence Score Weighting by Data Quality
+  const flaggedRatio = cleanedData.filter(p => p.isFlagged).length / Math.max(1, cleanedData.length);
+  let confidenceScore = Math.round(combinedR2 * 100 * (1 - 0.5 * flaggedRatio)); // Penalize for bad data
+
+  // ISSUE 4: Horizon Decay
+  confidenceScore = Math.round(confidenceScore * 0.85); // Decay for prediction horizon
+  confidenceScore = Math.max(0, Math.min(100, confidenceScore));
 
   // 3. BIO-PHYSICS ENERGY MODEL (Axis B1 + Issue 2 Update)
   const currentWeight = cleanedData[cleanedData.length - 1].y;
@@ -189,15 +196,33 @@ export const predictWeightTrajectory = (
   if (metabolicRatio < 0.85) metabolicStatus = "High Adaptation (Slow)";
   if (metabolicRatio > 1.15) metabolicStatus = "Hyper-Metabolic";
 
+  // UPGRADE B: Compliance Inference
+  const expectedDailyImbalance = currentPlan.calories - currentPlan.maintenance;
+  const adherenceGap = Math.abs(realDailyImbalance - expectedDailyImbalance);
+  
+  // If reality is gaining (or losing way less) than planned > 600kcal discrepency
+  if (adherenceGap > 600) {
+      if (realDailyImbalance > expectedDailyImbalance) {
+           metabolicStatus = "Low Adherence / Tracking Error"; 
+      }
+  }
+
+  // ISSUE 3: Dynamic Health Thresholds
+  const maxSafeRate = currentWeight * 0.012; // 1.2% Body Weight
+
   if (effectiveSlope < 0) {
-      if (weeklyRate < -1.0) {
+      if (Math.abs(weeklyRate) > maxSafeRate) {
           isHealthyPace = false;
-          recommendation = "Rate too steep (>1kg/wk). Risk of muscle catabolism. Increase calories.";
+          recommendation = `Rate too steep (>${maxSafeRate.toFixed(1)}kg/wk). Risk of muscle catabolism. Increase calories.`;
       } else if (weeklyRate < -0.7 && proteinPerKg < 1.6) {
           isHealthyPace = false;
           recommendation = "Lean loss risk detected. Rate is fast but Protein < 1.6g/kg. Increase Protein.";
       } else if (Math.abs(weeklyRate) < 0.15 && cleanedData.length > 14) {
-          recommendation = "Plateau confirmed (28d trend flat). Consider Zig-Zag or NEAT reset.";
+          if (adherenceGap > 400 && metabolicRatio > 0.95) {
+             recommendation = "Plateau detected. High adherence gap: Check food tracking accuracy.";
+          } else {
+             recommendation = "Plateau confirmed (28d trend flat). Consider Zig-Zag or NEAT reset.";
+          }
       }
   }
 
@@ -210,10 +235,11 @@ export const predictWeightTrajectory = (
   // Losing: Body defends strongly (0.93). Gaining: Body defends weakly (0.97).
   let decayFactor = effectiveSlope < 0 ? 0.93 : 0.97;
 
-  // Target Dampening (Issue 5B Fix)
-  // If close to target, dampen rate (reduce multiplier)
-  if (targetWeight && Math.abs(currentWeight - targetWeight) < 2.0) {
-      decayFactor -= 0.05; // 0.93 -> 0.88 (Stops faster)
+  // ISSUE 2: Continuous Target Dampening
+  if (targetWeight) {
+      const dist = Math.abs(currentWeight - targetWeight);
+      const damp = Math.max(0, 1 - dist / 5.0); // Ramps from 0 (at 5kg+) to 1 (at 0kg)
+      decayFactor -= 0.05 * damp; // Stops faster as you get closer
   }
 
   // Principled Uncertainty (Issue 4 Fix)
