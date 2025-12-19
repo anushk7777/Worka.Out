@@ -148,15 +148,15 @@ export const predictWeightTrajectory = (
       const fatFraction = fatMass / (fatMass + 10.4);
       pRatio = 1 - fatFraction; 
   } else {
-      // GAIN: Protein-Aware Partitioning (Issue 2 Fix)
-      // "Tie lean gain fraction to protein and surplus size"
-      
-      if (surplus < 250 || proteinPerKg < 1.6) {
-          pRatio = 0.25; // Optimism Penalty: Low surplus/protein = mostly fat
-      } else if (surplus > 400 && isTraining) {
-          pRatio = 0.6; // High Flux + Training = High Partitioning
+      // GAIN: Protein-Aware Partitioning (REALITY CHECKED)
+      if (surplus < 200 || proteinPerKg < 1.4) {
+          pRatio = 0.15; // Untrained low surplus = mostly fat
+      } else if (surplus > 500 && isTraining && proteinPerKg >= 2.0) {
+          pRatio = 0.5; // Even with perfect conditions, max ~50% lean
+      } else if (isTraining && proteinPerKg >= 1.8) {
+          pRatio = 0.35; // Realistic trained baseline
       } else {
-          pRatio = 0.4; // Base Case
+          pRatio = 0.25; // Average
       }
   }
 
@@ -219,7 +219,7 @@ export const predictWeightTrajectory = (
   // Principled Uncertainty (Issue 4 Fix)
   // Use Prediction Interval Stats from 28d trend
   const { stdErr, meanX, Sxx, count } = trend28d;
-  const tScore = 2.0; // Approx for 95% CI
+  const tScore = 1.28; // 80% CI (Narrowed from 95% to exclude hydration noise)
   const safeStdErr = stdErr || 0.3;
   const safeSxx = Sxx || 1; // Prevent div/0
 

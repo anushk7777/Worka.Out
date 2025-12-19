@@ -157,8 +157,10 @@ export const calculatePlan = (profile: UserProfile, lastWeight?: number, daysSin
 
   let popAvgCorrected = popAvg;
   if (profile.age > 30) {
+      // Research shows ~2-3% per decade for sedentary, ~1% for active
+      const activityProtection = profile.activityLevel.includes('Very Active') ? 0.5 : 1.0;
       const decadesPast30 = (profile.age - 30) / 10;
-      const driftFactor = 1 - (decadesPast30 * 0.015);
+      const driftFactor = 1 - (decadesPast30 * 0.02 * activityProtection);
       popAvgCorrected *= driftFactor;
   }
 

@@ -6,6 +6,19 @@ import { SYSTEM_PROMPT, FOOD_DATABASE } from "../constants";
 // Initialize AI directly as per guidelines
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+const retryWithBackoff = async <T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> => {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await fn();
+        } catch (error) {
+            if (i === maxRetries - 1) throw error;
+            console.warn(`Retry attempt ${i + 1} failed. Retrying...`);
+            await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i))); // Exponential backoff
+        }
+    }
+    throw new Error("Max retries reached");
+};
+
 const getFoodDBContext = () => {
   return FOOD_DATABASE
     .sort((a, b) => a.name.localeCompare(b.name))
@@ -218,61 +231,66 @@ export const generateDailyMealPlan = async (
       Ensure all strings in the JSON response are properly closed and valid JSON syntax is maintained.
     `;
 
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-3-pro-preview", 
-            contents: prompt,
-            config: { 
-                thinkingConfig: { thinkingBudget: 16000 }, 
-                responseMimeType: "application/json",
-                responseSchema: {
-                  type: Type.OBJECT,
-                  properties: {
-                    meals: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.OBJECT,
-                        properties: {
-                          name: { type: Type.STRING },
-                          time: { type: Type.STRING },
-                          items: { type: Type.ARRAY, items: { type: Type.STRING } },
-                          macros: {
-                            type: Type.OBJECT,
-                            properties: {
-                              p: { type: Type.NUMBER },
-                              c: { type: Type.NUMBER },
-                              f: { type: Type.NUMBER },
-                              cal: { type: Type.NUMBER }
-                            },
-                            required: ["p", "c", "f", "cal"]
-                          },
-                          isCompleted: { type: Type.BOOLEAN }
-                        },
-                        required: ["name", "time", "items", "macros"]
-                      }
-                    },
-                    daily_totals: {
+    return retryWithBackoff(async () => {
+        try {
+            const response = await ai.models.generateContent({
+                model: "gemini-3-pro-preview", 
+                contents: prompt,
+                config: { 
+                    thinkingConfig: { thinkingBudget: 16000 }, 
+                    responseMimeType: "application/json",
+                    responseSchema: {
                       type: Type.OBJECT,
                       properties: {
-                        p: { type: Type.NUMBER },
-                        c: { type: Type.NUMBER },
-                        f: { type: Type.NUMBER },
-                        cal: { type: Type.NUMBER }
+                        meals: {
+                          type: Type.ARRAY,
+                          items: {
+                            type: Type.OBJECT,
+                            properties: {
+                              name: { type: Type.STRING },
+                              time: { type: Type.STRING },
+                              items: { type: Type.ARRAY, items: { type: Type.STRING } },
+                              macros: {
+                                type: Type.OBJECT,
+                                properties: {
+                                  p: { type: Type.NUMBER },
+                                  c: { type: Type.NUMBER },
+                                  f: { type: Type.NUMBER },
+                                  cal: { type: Type.NUMBER }
+                                },
+                                required: ["p", "c", "f", "cal"]
+                              },
+                              isCompleted: { type: Type.BOOLEAN }
+                            },
+                            required: ["name", "time", "items", "macros"]
+                          }
+                        },
+                        daily_totals: {
+                          type: Type.OBJECT,
+                          properties: {
+                            p: { type: Type.NUMBER },
+                            c: { type: Type.NUMBER },
+                            f: { type: Type.NUMBER },
+                            cal: { type: Type.NUMBER }
+                          },
+                          required: ["p", "c", "f", "cal"]
+                        }
                       },
-                      required: ["p", "c", "f", "cal"]
+                      required: ["meals", "daily_totals"]
                     }
-                  },
-                  required: ["meals", "daily_totals"]
-                }
-            } 
-        });
+                } 
+            });
 
-        const data = JSON.parse(cleanJson(response.text));
-        return { date: dateStr, meals: data?.meals || [], macros: data?.daily_totals || { p: 0, c: 0, f: 0, cal: 0 } };
-    } catch (e: any) {
-        console.error("Plan Gen Failed:", e);
-        throw new Error("Meal plan generation failed due to malformed response. Please try again.");
-    }
+            const data = JSON.parse(cleanJson(response.text));
+            if (!data?.meals || !Array.isArray(data.meals)) {
+                throw new Error("Invalid response format");
+            }
+            return { date: dateStr, meals: data.meals, macros: data.daily_totals || { p: 0, c: 0, f: 0, cal: 0 } };
+        } catch (e: any) {
+            console.error("Plan Gen Failed (Attempt):", e);
+            throw e; // Propagate to retry handler
+        }
+    });
 };
 
 export const handleDietDeviation = async (currentPlan: DailyMealPlanDB, targetMacros: MacroPlan, mealIndex: number, userDescription: string): Promise<DailyMealPlanDB> => {

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { UserProfile, MacroPlan, PersonalizedPlan, DailyMealPlanDB, DietMeal, ProgressEntry, WeightPrediction, FoodItem } from '../types';
 import { calculatePlan } from './Calculator';
 import { supabase } from '../services/supabaseClient';
@@ -204,7 +204,7 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
     }, { p: 0, c: 0, f: 0, cal: 0 });
   };
 
-  const consumed = getConsumedMacros(todayPlan);
+  const consumed = useMemo(() => getConsumedMacros(todayPlan), [todayPlan]);
   const totalCalTarget = plan.calories || 2000;
   const calPct = totalCalTarget > 0 ? Math.min(100, Math.round((consumed.cal / totalCalTarget) * 100)) : 0;
 
