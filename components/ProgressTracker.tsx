@@ -22,6 +22,14 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   
+  // Data Quality State
+  const [weighInType, setWeighInType] = useState<'fasted' | 'random'>('fasted');
+  const [flags, setFlags] = useState({
+      high_sodium: false,
+      high_carb: false,
+      alcohol: false
+  });
+
   const [loading, setLoading] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [showAnalyzer, setShowAnalyzer] = useState(false);
@@ -64,6 +72,10 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
     return `${year}-${month}-${day}`;
   };
 
+  const toggleFlag = (key: keyof typeof flags) => {
+      setFlags(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
   const handleLog = async () => {
     if (!weight) return;
     setLoading(true);
@@ -94,15 +106,19 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
       }
 
       // 2. Insert Log
+      // Append flags to notes for persistence without schema migration if columns don't exist yet
+      const flagsStr = JSON.stringify({ type: weighInType, flags });
+      const finalNotes = notes ? `${notes} || META: ${flagsStr}` : `META: ${flagsStr}`;
+
       const logData = {
         user_id: user.id,
         date: getTodayISO(), 
         weight: Number(weight),
         body_fat: bodyFat ? Number(bodyFat) : null,
         photo_url: photoUrl,
-        notes: notes
+        notes: finalNotes,
       };
-
+      
       const { data, error } = await supabase
         .from('progress_logs')
         .insert([logData])
@@ -112,15 +128,20 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
       if (error) throw error;
 
       // 3. Update local state
-      onAddLog({
+      // Parse back the metadata for UI
+      const parsedLog: ProgressEntry = {
         id: data.id,
         date: data.date,
         created_at: data.created_at,
         weight: data.weight,
         bodyFat: data.body_fat,
         photo_url: data.photo_url,
-        notes: data.notes
-      });
+        notes: data.notes,
+        weigh_in_type: weighInType,
+        flags: flags
+      };
+
+      onAddLog(parsedLog);
 
       // --- AUTO-SCALE LOGIC ---
       const weightDiff = Math.abs(weight - profile.weight);
@@ -139,6 +160,8 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
       setPhotoFile(null);
       setPhotoPreview(null);
       setLogMode('quick');
+      setFlags({ high_sodium: false, high_carb: false, alcohol: false });
+      setWeighInType('fasted');
 
     } catch (error) {
       console.error('Error logging progress:', error);
@@ -275,6 +298,54 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
                             placeholder="Optional"
                             />
                         </div>
+                        
+                        {/* --- DATA QUALITY AXIS UI --- */}
+                        <div className="md:col-span-2 space-y-4 pt-2">
+                            {/* Weigh In Type Toggle */}
+                            <div className="bg-dark/40 p-3 rounded-xl border border-white/5 flex justify-between items-center">
+                                <span className="text-xs text-gray-400 font-bold uppercase tracking-wide">Protocol</span>
+                                <div className="flex bg-black p-1 rounded-lg">
+                                    <button 
+                                        onClick={() => setWeighInType('fasted')}
+                                        className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${weighInType === 'fasted' ? 'bg-green-500/20 text-green-400' : 'text-gray-500 hover:text-white'}`}
+                                    >
+                                        Fasted (AM)
+                                    </button>
+                                    <button 
+                                        onClick={() => setWeighInType('random')}
+                                        className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all ${weighInType === 'random' ? 'bg-yellow-500/20 text-yellow-400' : 'text-gray-500 hover:text-white'}`}
+                                    >
+                                        Random
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Signal Flags */}
+                            <div>
+                                <label className="block text-xs text-gray-500 mb-2">Context Tags (Reduces Noise)</label>
+                                <div className="flex flex-wrap gap-2">
+                                    <button 
+                                        onClick={() => toggleFlag('high_sodium')}
+                                        className={`px-4 py-2 rounded-lg text-[10px] font-bold border transition-all ${flags.high_sodium ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-dark border-white/10 text-gray-500'}`}
+                                    >
+                                        <i className="fas fa-shaker mr-1.5"></i> High Sodium
+                                    </button>
+                                    <button 
+                                        onClick={() => toggleFlag('high_carb')}
+                                        className={`px-4 py-2 rounded-lg text-[10px] font-bold border transition-all ${flags.high_carb ? 'bg-orange-500/20 border-orange-500 text-orange-400' : 'bg-dark border-white/10 text-gray-500'}`}
+                                    >
+                                        <i className="fas fa-bread-slice mr-1.5"></i> Carb Load
+                                    </button>
+                                    <button 
+                                        onClick={() => toggleFlag('alcohol')}
+                                        className={`px-4 py-2 rounded-lg text-[10px] font-bold border transition-all ${flags.alcohol ? 'bg-purple-500/20 border-purple-500 text-purple-400' : 'bg-dark border-white/10 text-gray-500'}`}
+                                    >
+                                        <i className="fas fa-wine-glass mr-1.5"></i> Alcohol
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="md:col-span-2">
                             <label className="block text-xs text-gray-500 mb-1">Notes</label>
                             <textarea 
@@ -440,16 +511,41 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
             ) : (
               sortedLogs.map((log, index) => {
                 const prevLog = sortedLogs[index + 1];
+                // Extract metadata from notes if possible
+                let flags = null;
+                let cleanNotes = log.notes;
+                if (log.notes && log.notes.includes('META:')) {
+                    try {
+                        const parts = log.notes.split('META:');
+                        cleanNotes = parts[0];
+                        flags = JSON.parse(parts[1]);
+                    } catch (e) {}
+                }
+
                 return (
                   <div key={log.id} className="bg-secondary p-4 rounded-xl border border-gray-700 flex justify-between items-start">
                     <div className="flex-1">
-                      <div className="text-gray-400 text-xs mb-1">{log.date}</div>
+                      <div className="text-gray-400 text-xs mb-1 flex items-center gap-2">
+                          {log.date}
+                          {flags?.type === 'fasted' && <span className="text-[9px] text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded uppercase font-bold">Fasted</span>}
+                          {flags?.type === 'random' && <span className="text-[9px] text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded uppercase font-bold">Random</span>}
+                      </div>
                       <div className="text-white font-bold text-lg flex items-center gap-2">
                         {log.weight} kg
                         {prevLog && getTrendIcon(log.weight, prevLog.weight)}
                       </div>
                       {log.bodyFat && <div className="text-xs text-primary font-bold mt-1">{log.bodyFat}% Body Fat</div>}
-                      {log.notes && <div className="text-xs text-gray-500 mt-2 italic border-l-2 border-gray-600 pl-2">"{log.notes}"</div>}
+                      
+                      {/* Context Badges */}
+                      {flags?.flags && (
+                          <div className="flex gap-1 mt-2">
+                              {flags.flags.high_sodium && <div className="w-2 h-2 rounded-full bg-blue-500" title="High Sodium"></div>}
+                              {flags.flags.high_carb && <div className="w-2 h-2 rounded-full bg-orange-500" title="High Carb"></div>}
+                              {flags.flags.alcohol && <div className="w-2 h-2 rounded-full bg-purple-500" title="Alcohol"></div>}
+                          </div>
+                      )}
+
+                      {cleanNotes && <div className="text-xs text-gray-500 mt-2 italic border-l-2 border-gray-600 pl-2">"{cleanNotes}"</div>}
                     </div>
                     {log.photo_url && (
                       <a href={log.photo_url} target="_blank" rel="noopener noreferrer" className="ml-4 w-14 h-14 bg-dark rounded-lg overflow-hidden border border-gray-600 flex-shrink-0 relative group">

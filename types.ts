@@ -42,6 +42,13 @@ export interface ProgressEntry {
   bodyFat?: number;
   photo_url?: string; // New field for image storage
   notes?: string;
+  // --- Data Quality Axis ---
+  weigh_in_type?: 'fasted' | 'random';
+  flags?: {
+    high_sodium?: boolean;
+    high_carb?: boolean;
+    alcohol?: boolean;
+  };
 }
 
 export interface MacroPlan {
@@ -63,18 +70,25 @@ export interface MacroPlan {
 
 export interface WeightPrediction {
   projectedWeightIn4Weeks: number;
+  projectedRange: { min: number; max: number }; // Confidence Interval
   projectedBodyFatIn4Weeks: number;
   confidenceScore: number; // 0 to 100
   trendAnalysis: {
     weeklyRateOfChange: number; // kg per week
+    effectiveSlope: number; // kg per day (blended)
     isHealthyPace: boolean;
     recommendation: string;
+    realTdee?: number; // Reverse-calculated actual expenditure
+    neatPenalty?: number; // Metabolic slowdown due to NEAT
+    effectiveEnergyDensity?: number; // Real kcal/kg based on tissue partition
+    metabolicAdaptation?: string; // 'High', 'Moderate', 'Low'
+    tissuePartition?: { fatMassChange: number; leanMassChange: number }; // Est. breakdown
   };
   milestoneDate?: {
     targetWeight: number;
     estimatedDate: string;
   };
-  graphData: { date: string; weight: number; isProjection: boolean }[];
+  graphData: { date: string; weight: number; isProjection: boolean; min?: number; max?: number }[];
 }
 
 export interface DietMeal {

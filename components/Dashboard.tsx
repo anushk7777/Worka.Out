@@ -252,12 +252,33 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
       fetchDailyPlans(); 
   }, [userId, refreshTrigger]); 
 
+  // Parse logs to handle flags correctly before passing to analytics
+  const processedLogs = logs?.map(log => {
+      let flags = undefined;
+      let weighInType: 'fasted'|'random' = 'fasted';
+      
+      // Parse metadata from notes if not available in direct fields
+      if (log.notes && log.notes.includes('META:')) {
+          try {
+              const meta = JSON.parse(log.notes.split('META:')[1]);
+              flags = meta.flags;
+              weighInType = meta.type || 'fasted';
+          } catch(e) {}
+      }
+      // If direct fields exist (future proofing), use them
+      if (log.flags) flags = log.flags;
+      if (log.weigh_in_type) weighInType = log.weigh_in_type;
+
+      return { ...log, flags, weigh_in_type: weighInType };
+  });
+
   useEffect(() => {
-      if (Array.isArray(logs) && logs.length > 0) {
-          const pred = predictWeightTrajectory(logs, plan, undefined); 
+      if (Array.isArray(processedLogs) && processedLogs.length > 0) {
+          const isTraining = !!(workoutPlan && workoutPlan.workout && workoutPlan.workout.length > 0);
+          const pred = predictWeightTrajectory(processedLogs, plan, undefined, isTraining); 
           setPrediction(pred);
       }
-  }, [logs, plan]);
+  }, [logs, plan, workoutPlan]);
 
   const triggerVisualHaptic = (type: 'success' | 'error', id: string) => {
       setVisualHaptic({ type, id });
@@ -680,7 +701,7 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
       <div className="min-h-[450px] relative z-10 pb-12 px-1">
         {activeTab === 'diet' && (
             <div className="space-y-6 animate-slide-up">
-                
+                {/* ... existing diet UI ... */}
                 {/* --- GOAL MISMATCH ALERT --- */}
                 {isPlanMismatch && (
                     <FadeInItem>
@@ -861,37 +882,81 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                             <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center">
                                 <i className="fas fa-project-diagram text-accent"></i>
                             </div>
-                            <h3 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.3em]">Trajectory Projection</h3>
+                            <h3 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.3em]">Biometric Forecast</h3>
                             </div>
                             
-                            <div className="flex items-baseline gap-4 mb-2">
-                                <span className="text-8xl font-black text-white tracking-tighter tabular-nums drop-shadow-lg">{prediction.projectedWeightIn4Weeks}</span>
-                                <span className="text-2xl text-gray-600 font-black tracking-tighter uppercase">KG</span>
+                            {/* Forecast Header with Range */}
+                            <div className="mb-8">
+                                <div className="flex items-baseline gap-4 mb-1">
+                                    <span className="text-8xl font-black text-white tracking-tighter tabular-nums drop-shadow-lg">{prediction.projectedWeightIn4Weeks}</span>
+                                    <span className="text-2xl text-gray-600 font-black tracking-tighter uppercase">KG</span>
+                                </div>
+                                <div className="text-[10px] text-gray-400 font-medium ml-2">
+                                    Cone of Uncertainty: <span className="text-accent">{prediction.projectedRange.min}</span> - <span className="text-accent">{prediction.projectedRange.max}</span> kg
+                                </div>
                             </div>
-                            <p className="text-sm text-accent font-black uppercase tracking-[0.2em] mb-12">4-Week System State</p>
+
+                            {/* Tissue Partitioning */}
+                            {prediction.trendAnalysis.tissuePartition && (
+                                <div className="grid grid-cols-2 gap-4 mb-8">
+                                    <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-3xl">
+                                        <p className="text-[9px] text-red-300 font-bold uppercase tracking-wider mb-1">Fat Mass</p>
+                                        <p className="text-2xl font-black text-white tabular-nums">
+                                            {prediction.trendAnalysis.tissuePartition.fatMassChange > 0 ? '+' : ''}{prediction.trendAnalysis.tissuePartition.fatMassChange} <span className="text-xs">kg</span>
+                                        </p>
+                                    </div>
+                                    <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-3xl">
+                                        <p className="text-[9px] text-blue-300 font-bold uppercase tracking-wider mb-1">Lean Mass</p>
+                                        <p className="text-2xl font-black text-white tabular-nums">
+                                            {prediction.trendAnalysis.tissuePartition.leanMassChange > 0 ? '+' : ''}{prediction.trendAnalysis.tissuePartition.leanMassChange} <span className="text-xs">kg</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                             
-                            <div className="space-y-8">
+                            <div className="space-y-4">
                                 <div className="bg-black/60 p-7 rounded-[36px] border border-white/10 inner-glow shadow-inner">
                                     <div className="flex justify-between items-center mb-6">
                                         <div className="flex flex-col">
-                                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1">Mass Velocity</span>
-                                            <span className="text-white font-black text-lg tabular-nums">0.82 <span className="text-xs text-gray-600 tracking-normal">x-factor</span></span>
+                                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1">Real TDEE (Bio-Physics)</span>
+                                            <span className="text-white font-black text-lg tabular-nums">
+                                                {prediction.trendAnalysis.realTdee || 0} <span className="text-xs text-gray-600 tracking-normal">kcal</span>
+                                            </span>
                                         </div>
-                                        <span className={`text-[10px] font-black uppercase px-4 py-2 rounded-2xl border shadow-lg ${prediction.trendAnalysis?.isHealthyPace ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'}`}>
-                                            {prediction.trendAnalysis?.weeklyRateOfChange > 0 ? '+' : ''}{prediction.trendAnalysis?.weeklyRateOfChange} kg / week
+                                        <span className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-xl border ${prediction.trendAnalysis.metabolicAdaptation?.includes('High') ? 'bg-red-500/20 text-red-300 border-red-500/40' : 'bg-green-500/10 text-green-400 border-green-500/30'}`}>
+                                            {prediction.trendAnalysis.metabolicAdaptation}
                                         </span>
                                     </div>
+                                    
+                                    {/* NEAT PENALTY DISPLAY */}
+                                    {prediction.trendAnalysis.neatPenalty && prediction.trendAnalysis.neatPenalty > 0 && (
+                                        <div className="flex justify-between items-center mb-4 text-xs text-red-400 bg-red-500/5 p-3 rounded-xl border border-red-500/20">
+                                            <span><i className="fas fa-arrow-down mr-2"></i> NEAT Suppression</span>
+                                            <span className="font-bold">-{prediction.trendAnalysis.neatPenalty} kcal</span>
+                                        </div>
+                                    )}
+
+                                    {/* Effective Energy Density Display */}
+                                    <div className="flex justify-between items-center text-[10px] text-gray-500 mb-2 px-1">
+                                        <span>Energy Density (Forbes Model)</span>
+                                        <span>{prediction.trendAnalysis.effectiveEnergyDensity} kcal/kg</span>
+                                    </div>
+
                                     <div className="h-3 w-full bg-white/[0.05] rounded-full overflow-hidden shadow-inner p-[2px]">
-                                        <div className={`h-full rounded-full bg-accent transition-all duration-1500 ease-liquid shadow-[0_0_20px_rgba(56,189,248,0.4)] relative`} style={{width: '78%'}}>
+                                        <div className={`h-full rounded-full bg-accent transition-all duration-1500 ease-liquid shadow-[0_0_20px_rgba(56,189,248,0.4)] relative`} style={{width: `${Math.min(100, Math.max(0, prediction.confidenceScore))}%`}}>
                                             <div className="absolute inset-0 bg-white/20 blur-[1px] h-[30%] rounded-full"></div>
                                         </div>
                                     </div>
+                                    <p className="text-[9px] text-right text-gray-600 mt-2 font-mono">Weighted Confidence: {prediction.confidenceScore}%</p>
                                 </div>
                                 
                                 <div className="glass-liquid p-6 rounded-[32px] border-accent/20 relative group-hover:border-accent/40 transition-colors duration-700">
                                     <p className="text-sm text-gray-300 leading-relaxed font-medium italic">
                                         "{prediction.trendAnalysis?.recommendation}"
                                     </p>
+                                    <div className="mt-2 text-[10px] text-gray-500 font-mono text-right">
+                                        Slope: {prediction.trendAnalysis.effectiveSlope} kg/day
+                                    </div>
                                 </div>
                             </div>
                         </div>
