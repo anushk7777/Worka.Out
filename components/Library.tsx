@@ -23,7 +23,7 @@ const Library: React.FC = () => {
   return (
     <div className="p-4 pb-24 h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-primary">WorkA.out Library</h2>
+        <h2 className="text-2xl font-bold text-primary">MealMan Library</h2>
       </div>
 
       {/* Sub-tabs */}

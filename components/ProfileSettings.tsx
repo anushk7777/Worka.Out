@@ -3,19 +3,23 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, Goal, ActivityLevel } from '../types';
 import { supabase } from '../services/supabaseClient';
 import { calculatePlan } from './Calculator';
+import { generateDailyMealPlan } from '../services/geminiService';
 
 interface Props {
   profile: UserProfile;
   onUpdateProfile: (updatedProfile: UserProfile) => void;
   onSignOut: () => void;
+  onPlanRegenerated?: () => void; // New callback
 }
 
-const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut }) => {
+const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut, onPlanRegenerated }) => {
   const [formData, setFormData] = useState<UserProfile>({
       ...profile,
       dietary_preference: profile.dietary_preference || 'non-veg'
   });
   const [loading, setLoading] = useState(false);
+  const [regenLoading, setRegenLoading] = useState(false);
+  const [showRegen, setShowRegen] = useState(false);
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
@@ -32,18 +36,32 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
   const handleChange = (field: keyof UserProfile, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setMessage(null);
+    setShowRegen(false);
   };
 
-  const handleSave = async () => {
+  // Helper to match Dashboard's local date logic exactly
+  const getLocalISODate = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Consolidated function to save profile AND regenerate plan if needed
+  const handleSaveAndRegenerate = async () => {
     setLoading(true);
     setMessage(null);
+    setShowRegen(false);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No user found");
 
+      // 1. Calculate New Macros
       const newMacros = calculatePlan(formData);
-
+      
+      // 2. Update Profile in DB
       const updates = {
         name: formData.name,
         age: formData.age,
@@ -57,71 +75,82 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
         weekly_calories: newMacros.calories * 7
       };
 
-      const { error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', user.id);
-
+      const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
       if (error) throw error;
 
-      onUpdateProfile({ 
-        ...formData, 
-        daily_calories: newMacros.calories,
-        weekly_calories: newMacros.calories * 7
-      });
+      // Update Local State immediately
+      onUpdateProfile({ ...formData, daily_calories: newMacros.calories, weekly_calories: newMacros.calories * 7 });
+      
+      // 3. AUTO-REGENERATE PLAN (Implicitly done to fix user workflow)
+      setMessage({ text: "Profile Saved. Calculating New Portions...", type: 'success' });
+      
+      try {
+          // Use local date to match Dashboard
+          const today = getLocalISODate();
+          
+          const newPlan = await generateDailyMealPlan(
+              formData, 
+              newMacros, // Pass NEW macro targets
+              today, 
+              [], 
+              "GOAL CHANGED: Automatic Plan Adjustment based on new profile settings.",
+              formData.dietary_preference as any
+          );
 
-      setMessage({ 
-        text: "Profile updated. Your new meal plan will be generated starting TOMORROW.", 
-        type: 'success' 
-      });
+          const { error: planError } = await supabase.from('daily_meal_plans').upsert({ 
+              user_id: user.id, 
+              date: today, 
+              meals: newPlan.meals, 
+              macros: newPlan.macros 
+          }, { onConflict: 'user_id, date' });
+
+          if (planError) throw planError;
+          
+          // Signal App to update dashboard version
+          if (onPlanRegenerated) {
+              onPlanRegenerated();
+          }
+          setMessage({ text: "Success! Diet Plan Updated to new Calories.", type: 'success' });
+
+      } catch (planErr) {
+          console.error("Auto-regen failed:", planErr);
+          setMessage({ text: "Profile saved, but Diet Plan update failed. Try manually.", type: 'error' });
+          setShowRegen(true); // Fallback to manual button if auto fails
+      }
 
     } catch (err: any) {
       console.error(err);
-      const errorMsg = typeof err === 'string' ? err : (err?.message || 'An unexpected error occurred.');
-      setMessage({ 
-        text: `Failed to update profile: ${errorMsg}`, 
-        type: 'error' 
-      });
+      setMessage({ text: `Failed to update profile: ${err?.message}`, type: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
-  // --- UI HELPERS ---
   const goals = Object.values(Goal);
   const currentGoalIndex = goals.indexOf(formData.goal);
-
   const diets = ['veg', 'egg', 'non-veg'] as const;
   const currentDietIndex = diets.indexOf(formData.dietary_preference as any);
 
   const parseActivity = (fullString: string) => {
     const parts = fullString.split(' (');
-    return {
-      title: parts[0],
-      desc: parts[1] ? parts[1].replace(')', '') : ''
-    };
+    return { title: parts[0], desc: parts[1] ? parts[1].replace(')', '') : '' };
   };
 
   return (
-    <div className="p-4 pb-32 space-y-8">
+    <div className="p-4 pb-32 space-y-8 animate-fade-in">
       {/* Header */}
       <div className="flex justify-between items-center">
           <div>
             <h2 className="text-3xl font-black text-white tracking-tight">Settings</h2>
             <p className="text-xs text-gray-400 font-medium">Customize your plan</p>
           </div>
-          <button 
-            onClick={onSignOut}
-            className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all active:scale-95"
-          >
+          <button onClick={onSignOut} className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all active:scale-90">
             <i className="fas fa-power-off"></i>
           </button>
       </div>
 
       {/* Hero Stats Card */}
-      <div className="relative rounded-3xl p-6 overflow-hidden border border-white/10 group">
-         {/* Dynamic Background */}
-         <div className="absolute inset-0 bg-gradient-to-br from-secondary via-dark to-black z-0"></div>
+      <div className="relative rounded-3xl p-6 overflow-hidden border border-white/10 group glass-card">
          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-[60px] group-hover:bg-primary/30 transition-all duration-700"></div>
          
          <div className="relative z-10 flex items-center gap-4">
@@ -154,21 +183,21 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
               <div className="relative bg-black/40 backdrop-blur-md rounded-2xl p-1.5 flex justify-between items-center border border-white/5 h-14 select-none">
                   {/* Sliding Pill */}
                   <div 
-                    className="absolute top-1.5 bottom-1.5 bg-gradient-to-r from-primary to-yellow-500 rounded-xl shadow-lg shadow-primary/20 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]"
+                    className="absolute top-1.5 bottom-1.5 bg-gradient-to-r from-primary to-yellow-500 rounded-xl shadow-lg shadow-primary/20 transition-all duration-500 ease-spring gpu"
                     style={{
-                        left: `${(currentGoalIndex / goals.length) * 100}%`,
+                        transform: `translateX(${currentGoalIndex * 100}%)`,
                         width: `${100 / goals.length}%`,
-                        marginLeft: '0.2%' // Tiny adjustment for gap
                     }}
                   ></div>
 
-                  {goals.map((g) => (
+                  {goals.map((g, idx) => (
                       <button
                           key={g}
                           onClick={() => handleChange('goal', g)}
                           className={`flex-1 relative z-10 h-full text-[11px] font-bold uppercase tracking-wide transition-colors duration-300 flex items-center justify-center ${
                               formData.goal === g ? 'text-black' : 'text-gray-500 hover:text-gray-300'
                           }`}
+                          style={{width: `${100/goals.length}%`}}
                       >
                           {g === 'Fat Loss' && <i className="fas fa-fire mr-1.5"></i>}
                           {g === 'Muscle Gain' && <i className="fas fa-dumbbell mr-1.5"></i>}
@@ -188,15 +217,14 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
               <div className="relative bg-black/40 backdrop-blur-md rounded-2xl p-1.5 flex justify-between items-center border border-white/5 h-16 select-none">
                   {/* Sliding Pill */}
                   <div 
-                    className={`absolute top-1.5 bottom-1.5 rounded-xl shadow-lg transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                    className={`absolute top-1.5 bottom-1.5 rounded-xl shadow-lg transition-all duration-500 ease-spring gpu ${
                         formData.dietary_preference === 'veg' ? 'bg-green-500 shadow-green-500/20' : 
                         formData.dietary_preference === 'egg' ? 'bg-yellow-500 shadow-yellow-500/20' : 
                         'bg-red-500 shadow-red-500/20'
                     }`}
                     style={{
-                        left: `${(currentDietIndex / diets.length) * 100}%`,
+                        transform: `translateX(${currentDietIndex * 100}%)`,
                         width: `${100 / diets.length}%`,
-                         marginLeft: '0.2%'
                     }}
                   ></div>
 
@@ -207,13 +235,13 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
                           className={`flex-1 relative z-10 h-full flex flex-col items-center justify-center transition-colors duration-300 ${
                               formData.dietary_preference === type ? 'text-white' : 'text-gray-500 hover:text-gray-300'
                           }`}
+                          style={{width: `${100/diets.length}%`}}
                       >
                           <i className={`fas ${type === 'veg' ? 'fa-leaf' : type === 'egg' ? 'fa-egg' : 'fa-drumstick-bite'} text-lg mb-0.5 ${formData.dietary_preference === type ? 'scale-110' : ''} transition-transform`}></i>
                           <span className="text-[9px] font-bold uppercase">{type}</span>
                       </button>
                   ))}
               </div>
-              <p className="text-[10px] text-gray-500 text-center">*Updates apply to tomorrow's plan</p>
           </div>
 
           {/* ACTIVITY LEVEL CARDS */}
@@ -230,7 +258,7 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
                         <button
                           key={level}
                           onClick={() => handleChange('activityLevel', level)}
-                          className={`w-full text-left p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden group ${
+                          className={`w-full text-left p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden group active:scale-[0.98] ${
                              isSelected 
                                ? 'bg-blue-600/10 border-blue-500/50 shadow-[0_0_20px_rgba(37,99,235,0.15)]' 
                                : 'bg-black/20 border-white/5 hover:bg-white/5 hover:border-white/10'
@@ -251,18 +279,15 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
                                     </div>
                                 )}
                              </div>
-                             {/* Fill Effect */}
-                             {isSelected && <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-transparent"></div>}
                         </button>
                       );
                   })}
               </div>
           </div>
 
-          {/* Save Button Container */}
-          <div className="pt-4 sticky bottom-6 z-20">
+          <div className="pt-4 sticky bottom-6 z-20 space-y-3">
               <button 
-                  onClick={handleSave}
+                  onClick={handleSaveAndRegenerate}
                   disabled={loading}
                   className="w-full bg-white text-black font-black py-4 rounded-2xl shadow-2xl shadow-white/10 hover:bg-gray-200 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 text-sm uppercase tracking-wider relative overflow-hidden"
               >
@@ -270,12 +295,41 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
                        <i className="fas fa-circle-notch fa-spin"></i>
                   ) : (
                        <>
-                         <span className="relative z-10">Save & Update Plan</span>
-                         <i className="fas fa-arrow-right relative z-10"></i>
-                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-200/50 to-transparent translate-x-[-100%] animate-[shimmer_2s_infinite]"></div>
+                         <span className="relative z-10">Save Settings & Update Plan</span>
+                         <i className="fas fa-save relative z-10"></i>
                        </>
                   )}
               </button>
+
+              {/* Retry Button only shows if Auto-Regen Fails */}
+              {showRegen && (
+                  <button 
+                    onClick={async () => {
+                        setRegenLoading(true);
+                        // Re-run the manual regen logic if needed
+                        try {
+                           const { data: { user } } = await supabase.auth.getUser();
+                           if (!user) throw new Error("No user");
+                           const today = getLocalISODate();
+                           const macros = calculatePlan(formData);
+                           const newPlan = await generateDailyMealPlan(
+                              formData, macros, today, [], 
+                              "Manual Retry", formData.dietary_preference as any
+                           );
+                           await supabase.from('daily_meal_plans').upsert({ user_id: user.id, date: today, meals: newPlan.meals, macros: newPlan.macros }, { onConflict: 'user_id, date' });
+                           if (onPlanRegenerated) onPlanRegenerated();
+                           setMessage({ text: "Plan Updated!", type: 'success' });
+                           setShowRegen(false);
+                        } catch(e) { console.error(e); }
+                        setRegenLoading(false);
+                    }}
+                    disabled={regenLoading}
+                    className="w-full bg-red-500 text-white font-bold py-3 rounded-2xl shadow-lg animate-fade-in-up flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                  >
+                      {regenLoading ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-redo"></i>}
+                      Retry Plan Update
+                  </button>
+              )}
           </div>
 
           {message && (

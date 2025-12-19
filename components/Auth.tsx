@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 
@@ -7,11 +8,13 @@ const Auth: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccessMsg(null);
 
     try {
       if (isLogin) {
@@ -26,7 +29,10 @@ const Auth: React.FC = () => {
           password,
         });
         if (error) throw error;
-        alert('Check your email for the confirmation link!');
+        
+        setSuccessMsg('Profile Pending. Please check your email for neural link verification.');
+        setIsLogin(true);
+        setPassword('');
       }
     } catch (error: any) {
       setError(error.message);
@@ -36,48 +42,52 @@ const Auth: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 relative overflow-hidden">
-      {/* Dynamic Background */}
-      <div className="absolute top-0 left-0 w-full h-full bg-dark">
-        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-primary/10 rounded-full blur-[100px] animate-pulse-slow"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-600/10 rounded-full blur-[120px]"></div>
+    <div className="flex flex-col items-center justify-center min-h-screen p-6 relative overflow-hidden">
+      <div className="absolute inset-0 z-0">
+          <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] bg-primary/20 rounded-full blur-[140px] animate-pulse-slow"></div>
+          <div className="absolute bottom-[-20%] left-[-10%] w-[70%] h-[70%] bg-blue-600/20 rounded-full blur-[160px]"></div>
       </div>
 
-      <div className="glass w-full max-w-md p-8 rounded-3xl shadow-2xl border border-white/10 relative z-10 animate-slide-up backdrop-blur-xl">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-tr from-primary to-yellow-500 mb-4 shadow-lg shadow-primary/30">
-             <i className="fas fa-dumbbell text-2xl text-dark"></i>
+      <div className="glass-card w-full max-w-sm p-10 rounded-[48px] shadow-[0_40px_100px_rgba(0,0,0,0.6)] relative z-10 animate-slide-up backdrop-blur-3xl border border-white/10 inner-glow gpu">
+        <header className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-[28px] bg-gradient-to-tr from-primary to-yellow-400 mb-6 shadow-2xl shadow-primary/40 transform rotate-12">
+             <i className="fas fa-shield-heart text-3xl text-dark"></i>
           </div>
-          <h1 className="text-4xl font-black text-white tracking-tighter">
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-yellow-200">WORKA</span>.OUT
+          <h1 className="text-5xl font-black text-white tracking-tighter mb-2">
+            <span className="text-transparent bg-clip-text bg-gradient-to-br from-white via-primary to-yellow-600">MEAL</span>MAN
           </h1>
-          <p className="text-gray-400 text-sm mt-2 font-medium">Elite AI Personal Trainer</p>
-        </div>
+          <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.4em]">Elite AI Core</p>
+        </header>
 
-        <form onSubmit={handleAuth} className="space-y-5">
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-400 ml-1 uppercase tracking-wider">Email</label>
-            <div className="relative">
-              <i className="fas fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
+        {successMsg && (
+          <div className="mb-8 glass-liquid border-green-500/40 p-5 rounded-2xl text-green-300 text-xs leading-relaxed animate-fade-in flex gap-4 items-center">
+            <i className="fas fa-shuttle-space text-green-400 text-xl"></i>
+            <p className="font-bold">{successMsg}</p>
+          </div>
+        )}
+
+        <form onSubmit={handleAuth} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-500 ml-1 uppercase tracking-[0.2em]">Neural ID</label>
+            <div className="relative group">
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-black/30 border border-gray-700 rounded-xl py-3.5 pl-12 pr-4 text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder-gray-600"
-                placeholder="you@example.com"
+                className="w-full bg-black/40 border border-white/5 rounded-2xl py-4 px-6 text-white focus:border-primary focus:bg-black/60 outline-none transition-all placeholder-gray-700 text-sm font-medium"
+                placeholder="id@nexus.com"
                 required
               />
             </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-400 ml-1 uppercase tracking-wider">Password</label>
-            <div className="relative">
-              <i className="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-500 ml-1 uppercase tracking-[0.2em]">Security Key</label>
+            <div className="relative group">
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-black/30 border border-gray-700 rounded-xl py-3.5 pl-12 pr-4 text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder-gray-600"
+                className="w-full bg-black/40 border border-white/5 rounded-2xl py-4 px-6 text-white focus:border-primary focus:bg-black/60 outline-none transition-all placeholder-gray-700 text-sm font-medium"
                 placeholder="••••••••"
                 required
               />
@@ -85,31 +95,31 @@ const Auth: React.FC = () => {
           </div>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/50 p-3 rounded-lg text-red-200 text-xs text-center flex items-center justify-center gap-2">
-              <i className="fas fa-exclamation-circle"></i> {error}
+            <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl text-red-400 text-[10px] font-black uppercase tracking-widest text-center">
+              Access Denied: {error}
             </div>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-primary to-yellow-500 hover:to-yellow-400 text-dark font-bold py-4 rounded-xl shadow-lg shadow-primary/25 transform transition-all active:scale-[0.98] disabled:opacity-50 disabled:scale-100 mt-4"
+            className="w-full bg-white text-dark font-black py-5 rounded-2xl shadow-[0_20px_40px_rgba(255,255,255,0.1)] active:scale-95 disabled:opacity-50 transition-all text-xs uppercase tracking-[0.2em] mt-4"
           >
-            {loading ? <i className="fas fa-circle-notch fa-spin"></i> : (isLogin ? 'Access WorkA.out' : 'Start Journey')}
+            {loading ? <i className="fas fa-sync-alt fa-spin"></i> : (isLogin ? 'Establish Link' : 'Initialize ID')}
           </button>
         </form>
 
-        <div className="mt-8 text-center">
+        <footer className="mt-10 text-center">
           <button
-            onClick={() => setIsLogin(!isLogin)}
-            className="text-sm text-gray-400 hover:text-white transition-colors"
+            onClick={() => { setIsLogin(!isLogin); setSuccessMsg(null); setError(null); }}
+            className="text-[10px] text-gray-500 hover:text-white transition-colors font-black uppercase tracking-[0.2em]"
           >
-            {isLogin ? "New user? " : "Have an account? "}
-            <span className="text-primary font-bold hover:underline">
-              {isLogin ? 'Create Account' : 'Sign In'}
+            {isLogin ? "No Link? " : "Linked? "}
+            <span className="text-primary hover:underline">
+              {isLogin ? 'Register' : 'Authorize'}
             </span>
           </button>
-        </div>
+        </footer>
       </div>
     </div>
   );

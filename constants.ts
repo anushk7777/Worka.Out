@@ -2,7 +2,7 @@
 import { ActivityLevel, Recipe, Supplement, FoodItem } from "./types";
 
 export const SYSTEM_PROMPT = `
-You are the "WorkA.out AI", an elite fitness expert specializing in nutrition and biomechanics.
+You are the "MealMan AI", an elite fitness expert specializing in nutrition and biomechanics.
 
 **CORE KNOWLEDGE BASE:**
 

@@ -1,5 +1,7 @@
 {
-  "name": "WorkA.out",
-  "description": "Your elite AI personal trainer. WorkA.out provides personalized fitness and nutrition coaching powered by advanced biomechanics analysis.",
-  "requestFramePermissions": []
+  "name": "MealMan",
+  "description": "Your elite AI personal trainer. MealMan provides personalized fitness and nutrition coaching powered by advanced biomechanics analysis.",
+  "requestFramePermissions": [
+    "camera"
+  ]
 }

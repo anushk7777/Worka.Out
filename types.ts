@@ -97,9 +97,21 @@ export interface WorkoutDay {
   exercises: WorkoutExercise[];
 }
 
-// Updated: Diet is now managed daily, Plan primarily holds Workout
+export interface SupplementRecommendation {
+  name: string;
+  dosage: string;
+  timing: string;
+  reason: string;
+  priority: 'Essential' | 'Performance' | 'Optional';
+  mechanism: string;
+  benefits: string[];
+  side_effects: string[];
+}
+
+// Updated: Plan holds Workout and Supplement Stack
 export interface PersonalizedPlan {
   workout: WorkoutDay[];
+  supplement_stack?: SupplementRecommendation[];
 }
 
 export interface Recipe {

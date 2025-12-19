@@ -1,26 +1,33 @@
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from './services/supabaseClient';
-import Auth from './components/Auth';
-import Onboarding from './components/Onboarding';
-import { Dashboard } from './components/Dashboard';
-import SupplementAdvisor from './components/SupplementAdvisor';
-import ProgressTracker from './components/ProgressTracker';
-import CheckInDueModal from './components/CheckInDueModal';
-import ChatInterface from './components/ChatInterface'; 
-import ProfileSettings from './components/ProfileSettings'; 
-import { UserProfile, ProgressEntry, ActivityLevel, Goal, Gender, PersonalizedPlan } from './types';
+import { supabase } from '../services/supabaseClient';
+import Auth from './Auth';
+import Onboarding from './Onboarding';
+import { Dashboard } from './Dashboard';
+import SupplementAdvisor from './SupplementAdvisor';
+import ProgressTracker from './ProgressTracker';
+import CheckInDueModal from './CheckInDueModal';
+import ChatInterface from './ChatInterface'; 
+import ProfileSettings from './ProfileSettings'; 
+import { UserProfile, ProgressEntry, ActivityLevel, Goal, Gender, PersonalizedPlan } from '../types';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [workoutPlan, setWorkoutPlan] = useState<PersonalizedPlan | null>(null);
   const [progressLogs, setProgressLogs] = useState<ProgressEntry[]>([]);
+  // CHANGED: Replaced 'library' with 'supplements'
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'supplements' | 'progress' | 'profile'>('dashboard');
   const [loading, setLoading] = useState(true);
+  
+  // Data Synchronization State
   const [planVersion, setPlanVersion] = useState(0);
+  
+  // Check-in logic states
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [autoLaunchScanner, setAutoLaunchScanner] = useState(false);
+  
+  // Chat State
   const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
@@ -110,16 +117,17 @@ const App: React.FC = () => {
   };
 
   const handleUpdateProfile = (updatedProfile: UserProfile) => setProfile(updatedProfile);
-  const handlePlanRegenerated = () => setPlanVersion(prev => prev + 1);
+
+  const handlePlanRegenerated = () => {
+    setPlanVersion(prev => prev + 1);
+  };
 
   const handleSignOut = async () => {
-    setLoading(true);
     await supabase.auth.signOut();
     setProfile(null);
     setWorkoutPlan(null);
     setProgressLogs([]);
     setShowCheckInModal(false);
-    setLoading(false);
   };
 
   const handleStartCheckIn = () => {
@@ -131,34 +139,42 @@ const App: React.FC = () => {
   if (loading) {
     return (
       <div className="fixed inset-0 bg-dark flex flex-col items-center justify-center z-[9999]">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250px] h-[250px] bg-primary/20 rounded-full blur-[80px] animate-pulse-slow"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-primary/10 rounded-full blur-[100px] animate-pulse-slow"></div>
         <div className="relative z-10 flex flex-col items-center">
-            <div className="w-12 h-12 border-[4px] border-primary/5 border-t-primary rounded-full animate-spin mb-6"></div>
-            <p className="text-white font-black tracking-[0.3em] text-[10px] uppercase animate-pulse">Syncing ID</p>
+            <div className="w-14 h-14 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin mb-6"></div>
+            <p className="text-white font-bold tracking-[0.2em] text-[10px] uppercase animate-pulse">Initializing MealMan</p>
         </div>
       </div>
     );
   }
 
   if (!session) return <Auth />;
-  
   if (!profile) return (
       <div className="fixed inset-0 bg-dark overflow-y-auto overflow-x-hidden">
+        {/* Added the required onSignOut prop to fix the TypeScript error */}
         <Onboarding onComplete={(p) => { setProfile(p); fetchUserData(session.user.id); }} onSignOut={handleSignOut} />
       </div>
   );
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-transparent text-gray-200 font-sans overflow-hidden relative">
+    <div className="flex flex-col h-[100dvh] bg-dark text-gray-200 font-sans overflow-hidden relative selection:bg-primary/30">
+      
+      {/* Background Ambience */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+         <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-secondary/20 blur-[120px] rounded-full opacity-40 will-change-transform"></div>
+         <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-primary/10 blur-[120px] rounded-full opacity-40 will-change-transform"></div>
+      </div>
+
       {showCheckInModal && <CheckInDueModal onConfirm={handleStartCheckIn} onDismiss={() => setShowCheckInModal(false)} />}
       
       {showChat && (
-          <div className="fixed inset-0 z-[100] bg-dark/95 backdrop-blur-3xl animate-fade-in flex flex-col">
+          <div className="fixed inset-0 z-[100] bg-dark/95 backdrop-blur-xl animate-fade-in flex flex-col">
               <ChatInterface userProfile={profile} progressLogs={progressLogs} onClose={() => setShowChat(false)} />
           </div>
       )}
 
-      <main className="flex-1 overflow-y-auto no-scrollbar scroll-smooth pb-[110px] pt-[calc(var(--sat)+0.5rem)] relative z-10 w-full max-w-lg mx-auto px-4">
+      {/* Content Area with Safe Area Padding */}
+      <main className="flex-1 overflow-y-auto no-scrollbar scroll-smooth pb-[100px] pt-[var(--sat)] relative z-10 w-full max-w-lg mx-auto md:max-w-xl lg:max-w-2xl xl:max-w-4xl">
         <div className="animate-fade-in">
           {currentTab === 'dashboard' && (
              <Dashboard 
@@ -171,6 +187,7 @@ const App: React.FC = () => {
                 refreshTrigger={planVersion}
              />
           )}
+          {/* UPDATED: SupplementAdvisor is now the exclusive view for this tab */}
           {currentTab === 'supplements' && (
              <SupplementAdvisor 
                 profile={profile}
@@ -190,35 +207,58 @@ const App: React.FC = () => {
         </div>
       </main>
 
+      {/* Floating Chat Button */}
       {!showChat && (
         <button 
             onClick={() => setShowChat(true)}
-            className="fixed bottom-[95px] right-5 w-12 h-12 bg-gradient-to-tr from-primary to-yellow-400 rounded-full shadow-xl flex items-center justify-center z-40 haptic-press border border-white/20"
+            className="absolute bottom-24 right-5 w-14 h-14 bg-gradient-to-tr from-primary to-yellow-400 rounded-full shadow-2xl shadow-primary/30 flex items-center justify-center z-40 transition-transform active:scale-90 duration-300 ease-spring border-2 border-white/20 gpu"
         >
-            <i className="fas fa-robot text-dark text-xl"></i>
+            <i className="fas fa-robot text-dark text-2xl drop-shadow-sm"></i>
         </button>
       )}
 
-      <nav className="fixed bottom-6 left-5 right-5 h-[64px] z-50 flex justify-center">
-        <div className="liquid-dock w-full max-w-sm rounded-[32px] px-1 flex justify-around items-center h-full inner-glow">
-          {[
-            { id: 'dashboard', icon: 'fa-chart-pie', label: 'PLAN' },
-            { id: 'progress', icon: 'fa-chart-line', label: 'LOG' },
-            { id: 'supplements', icon: 'fa-flask', label: 'SUPP' },
-            { id: 'profile', icon: 'fa-user', label: 'YOU' }
-          ].map((tab) => (
-            <button 
-              key={tab.id}
-              onClick={() => setCurrentTab(tab.id as any)} 
-              className="group flex flex-col items-center justify-center w-12 h-12 transition-all duration-300 ease-spring haptic-press"
-            >
-              <div className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-all duration-500 ease-spring ${currentTab === tab.id ? 'bg-primary text-dark shadow-md scale-105' : 'text-gray-500'}`}>
-                <i className={`fas ${tab.icon} text-base`}></i>
-              </div>
-              <span className={`text-[7px] font-black tracking-widest mt-0.5 transition-all duration-300 ${currentTab === tab.id ? 'opacity-100 text-primary' : 'opacity-0'}`}>{tab.label}</span>
-            </button>
-          ))}
-        </div>
+      {/* Glass Bottom Nav */}
+      <nav className="glass-heavy fixed bottom-0 left-0 right-0 h-[85px] pb-[var(--sab)] flex justify-around items-center px-2 z-50">
+        <button 
+          onClick={() => setCurrentTab('dashboard')}
+          className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
+        >
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'dashboard' ? 'bg-primary text-dark shadow-[0_0_15px_rgba(255,215,0,0.3)] translate-y-[-2px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
+            <i className={`fas fa-chart-pie text-lg`}></i>
+          </div>
+          <span className={`text-[9px] font-bold tracking-widest transition-colors duration-300 ${currentTab === 'dashboard' ? 'text-primary' : 'text-gray-500'}`}>PLAN</span>
+        </button>
+
+        <button 
+          onClick={() => setCurrentTab('progress')}
+          className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
+        >
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'progress' ? 'bg-primary text-dark shadow-[0_0_15px_rgba(255,215,0,0.3)] translate-y-[-2px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
+            <i className={`fas fa-chart-line text-lg`}></i>
+          </div>
+          <span className={`text-[9px] font-bold tracking-widest transition-colors duration-300 ${currentTab === 'progress' ? 'text-primary' : 'text-gray-500'}`}>LOG</span>
+        </button>
+
+        {/* CHANGED: Replaced Library Button with Supplements Button */}
+        <button 
+          onClick={() => setCurrentTab('supplements')}
+          className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
+        >
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'supplements' ? 'bg-primary text-dark shadow-[0_0_15px_rgba(255,215,0,0.3)] translate-y-[-2px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
+            <i className={`fas fa-flask text-lg`}></i>
+          </div>
+          <span className={`text-[9px] font-bold tracking-widest transition-colors duration-300 ${currentTab === 'supplements' ? 'text-primary' : 'text-gray-500'}`}>SUPP</span>
+        </button>
+
+        <button 
+          onClick={() => setCurrentTab('profile')}
+          className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
+        >
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'profile' ? 'bg-primary text-dark shadow-[0_0_15px_rgba(255,215,0,0.3)] translate-y-[-2px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
+            <i className={`fas fa-user text-lg`}></i>
+          </div>
+          <span className={`text-[9px] font-bold tracking-widest transition-colors duration-300 ${currentTab === 'profile' ? 'text-primary' : 'text-gray-500'}`}>YOU</span>
+        </button>
       </nav>
     </div>
   );
