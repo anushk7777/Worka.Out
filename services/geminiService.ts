@@ -78,12 +78,32 @@ export const analyzeBodyComposition = async (
   frontImageBase64: string, 
   backImageBase64: string | null,
   profile: Partial<UserProfile>
-): Promise<{ percentage: number; reasoning: string }> => {
+): Promise<{ valid: boolean; percentage?: number; reasoning: string }> => {
   const prompt = `
-    Role: Senior Anthropometrist. Task: Body Composition Analysis.
-    Vitals: Gender: ${profile.gender}, Age: ${profile.age}, Height: ${profile.height} cm, Weight: ${profile.weight} kg
-    Analyze the provided images for muscle definition and subcutaneous fat levels.
-    Return JSON ONLY: { "percentage": number, "reasoning": "string" }
+    Role: Elite Biomechanics & Anthropometry Analyst.
+    Task: Conduct a clinical-grade Body Fat Percentage (BFP) analysis from visual data.
+    Subject Data: Gender: ${profile.gender}, Age: ${profile.age}, Height: ${profile.height} cm, Weight: ${profile.weight} kg.
+
+    PROTOCOL (STRICT):
+    1. **Validation Check**: 
+       - If the image is NOT a human torso/body (e.g. text, objects, blurry, face-only), REJECT immediately with valid: false.
+       - If clothing obscures critical landmarks (abs, waist), REJECT.
+
+    2. **Anatomical Segmentation (Deep Scan)**:
+       - Analyze Abdominal Definition: Check for linea alba, serratus anterior visibility, and lower ab vascularity.
+       - Analyze Muscular Separation: Check deltoid/bicep separation and quadricep tear-drop visibility.
+       - Analyze Adipose Storage: Evaluate love handles (suprailiac) and lower back storage.
+
+    3. **Estimation Logic**:
+       - Compare visual features against the Jackson-Pollock 3-site visual proxies.
+       - Reference "Navy Tape Method" visual proxies (neck-to-waist ratio).
+       - Cross-reference with standard athletic body composition charts for ${profile.gender}.
+
+    4. **Output**:
+       - Provide a single integer percentage.
+       - Provide a concise, clinical reasoning string (max 25 words) citing specific visual markers observed.
+
+    Example Reasoning: "Clear upper abs visible, serratus anterior faint. Slight suprailiac storage. Consistent with 14-16% range."
   `;
 
   try {
@@ -102,17 +122,19 @@ export const analyzeBodyComposition = async (
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview", 
+      model: "gemini-3-pro-preview", // UPGRADED MODEL FOR HIGHER ACCURACY
       contents: { parts: parts },
       config: { 
+        thinkingConfig: { thinkingBudget: 16000 }, // ENABLE DEEP THINKING
         responseMimeType: "application/json",
         responseSchema: { 
           type: Type.OBJECT, 
           properties: { 
+            valid: { type: Type.BOOLEAN },
             percentage: { type: Type.NUMBER }, 
             reasoning: { type: Type.STRING } 
           }, 
-          required: ["percentage", "reasoning"] 
+          required: ["valid", "reasoning"] 
         }
       }
     });
