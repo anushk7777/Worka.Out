@@ -47,6 +47,8 @@
               'blink': 'blink 1s step-end infinite',
               'spin-slow': 'spin 12s linear infinite',
               'ping-slow': 'ping 3s cubic-bezier(0, 0, 0.2, 1) infinite',
+              'scan-beam': 'scanBeam 2s linear infinite',
+              'rotate-3d': 'rotate3d 6s linear infinite',
             },
             keyframes: {
               fadeIn: {
@@ -102,6 +104,16 @@
               blink: {
                 '0%, 100%': { opacity: '1' },
                 '50%': { opacity: '0' }
+              },
+              scanBeam: {
+                '0%': { top: '0%', opacity: '0' },
+                '10%': { opacity: '1' },
+                '90%': { opacity: '1' },
+                '100%': { top: '100%', opacity: '0' },
+              },
+              rotate3d: {
+                '0%': { transform: 'rotateX(0deg) rotateY(0deg) rotateZ(0deg)' },
+                '100%': { transform: 'rotateX(360deg) rotateY(180deg) rotateZ(360deg)' },
               }
             }
           }
@@ -207,6 +219,37 @@
         mask-image: linear-gradient(to bottom, black 85%, transparent);
         -webkit-mask-image: linear-gradient(to bottom, black 85%, transparent);
       }
+
+      /* 3D Cube for Loading */
+      .scene-3d {
+        perspective: 1000px;
+        width: 100px;
+        height: 100px;
+      }
+      .cube-3d {
+        width: 100%;
+        height: 100%;
+        position: relative;
+        transform-style: preserve-3d;
+      }
+      .face-3d {
+        position: absolute;
+        width: 100px;
+        height: 100px;
+        border: 1px solid rgba(255, 215, 0, 0.3);
+        background: rgba(255, 215, 0, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        color: rgba(255,215,0,0.5);
+      }
+      .face-front  { transform: rotateY(0deg) translateZ(50px); }
+      .face-back   { transform: rotateY(180deg) translateZ(50px); }
+      .face-right  { transform: rotateY(90deg) translateZ(50px); }
+      .face-left   { transform: rotateY(-90deg) translateZ(50px); }
+      .face-top    { transform: rotateX(90deg) translateZ(50px); }
+      .face-bottom { transform: rotateX(-90deg) translateZ(50px); }
     </style>
   <script type="importmap">
 {
