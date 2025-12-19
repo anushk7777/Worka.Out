@@ -32,7 +32,21 @@ const App: React.FC = () => {
   // Gesture State
   const touchStart = useRef<{x: number, y: number} | null>(null);
 
+  // Contextual Background State
+  const [timePhase, setTimePhase] = useState<'morning' | 'noon' | 'evening' | 'night'>('night');
+
   useEffect(() => {
+    // Determine Time Phase for Ambient Background
+    const updateTimePhase = () => {
+        const h = new Date().getHours();
+        if (h >= 5 && h < 11) setTimePhase('morning');
+        else if (h >= 11 && h < 16) setTimePhase('noon');
+        else if (h >= 16 && h < 20) setTimePhase('evening');
+        else setTimePhase('night');
+    };
+    updateTimePhase();
+    const interval = setInterval(updateTimePhase, 60000 * 30); // Check every 30 mins
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) fetchUserData(session.user.id);
@@ -49,7 +63,10 @@ const App: React.FC = () => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+        subscription.unsubscribe();
+        clearInterval(interval);
+    };
   }, []);
 
   const fetchUserData = async (userId: string) => {
@@ -171,10 +188,38 @@ const App: React.FC = () => {
     touchStart.current = null;
   };
 
+  // Determine Background Colors based on Time
+  const getAmbientColors = () => {
+      switch(timePhase) {
+          case 'morning': return {
+              orb1: 'bg-orange-500/20',
+              orb2: 'bg-blue-500/10',
+              orb3: 'bg-yellow-500/10'
+          };
+          case 'noon': return {
+              orb1: 'bg-sky-400/20',
+              orb2: 'bg-blue-600/10',
+              orb3: 'bg-cyan-300/10'
+          };
+          case 'evening': return {
+              orb1: 'bg-purple-600/20',
+              orb2: 'bg-orange-600/20',
+              orb3: 'bg-pink-600/10'
+          };
+          default: return { // Night
+              orb1: 'bg-indigo-900/20',
+              orb2: 'bg-blue-900/10',
+              orb3: 'bg-slate-800/20'
+          };
+      }
+  };
+
+  const ambient = getAmbientColors();
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-dark flex flex-col items-center justify-center z-[9999]">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-primary/10 rounded-full blur-[100px] animate-pulse-slow"></div>
+        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 ${ambient.orb1} rounded-full blur-[100px] animate-pulse-slow`}></div>
         <div className="relative z-10 flex flex-col items-center">
             <div className="w-14 h-14 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin mb-6"></div>
             <p className="text-white font-bold tracking-[0.2em] text-[10px] uppercase animate-pulse">Initializing MealMan</p>
@@ -197,16 +242,20 @@ const App: React.FC = () => {
         onTouchEnd={handleTouchEnd}
     >
       
-      {/* Background Ambience */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-         <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-secondary/20 blur-[120px] rounded-full opacity-40 will-change-transform"></div>
-         <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-primary/10 blur-[120px] rounded-full opacity-40 will-change-transform"></div>
+      {/* Cinematic Dynamic Background */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+         {/* Top Orb */}
+         <div className={`absolute top-[-20%] left-[-10%] w-[80%] h-[80%] ${ambient.orb1} blur-[120px] rounded-full will-change-transform animate-[meshMove_20s_infinite_alternate] transition-colors duration-[3000ms]`}></div>
+         {/* Bottom Orb */}
+         <div className={`absolute bottom-[-20%] right-[-10%] w-[80%] h-[80%] ${ambient.orb2} blur-[120px] rounded-full will-change-transform animate-[meshMove_25s_infinite_alternate-reverse] transition-colors duration-[3000ms]`}></div>
+         {/* Middle Accent */}
+         <div className={`absolute top-1/3 left-1/3 w-[50%] h-[50%] ${ambient.orb3} blur-[100px] rounded-full opacity-50 will-change-transform animate-pulse-slow transition-colors duration-[3000ms]`}></div>
       </div>
 
       {showCheckInModal && <CheckInDueModal onConfirm={handleStartCheckIn} onDismiss={() => setShowCheckInModal(false)} />}
       
       {showChat && (
-          <div className="fixed inset-0 z-[100] bg-dark/95 backdrop-blur-xl animate-fade-in flex flex-col">
+          <div className="fixed inset-0 z-[100] bg-dark/95 backdrop-blur-3xl animate-fade-in flex flex-col">
               <ChatInterface userProfile={profile} progressLogs={progressLogs} onClose={() => setShowChat(false)} />
           </div>
       )}
@@ -248,52 +297,52 @@ const App: React.FC = () => {
       {!showChat && (
         <button 
             onClick={() => setShowChat(true)}
-            className="absolute bottom-24 right-5 w-14 h-14 bg-gradient-to-tr from-primary to-yellow-400 rounded-full shadow-2xl shadow-primary/30 flex items-center justify-center z-40 transition-transform active:scale-90 duration-300 ease-spring border-2 border-white/20 gpu"
+            className="absolute bottom-24 right-5 w-14 h-14 bg-gradient-to-tr from-primary to-yellow-400 rounded-full shadow-2xl shadow-primary/30 flex items-center justify-center z-40 transition-transform active:scale-90 duration-300 ease-spring border-2 border-white/20 gpu hover:scale-105"
         >
             <i className="fas fa-robot text-dark text-2xl drop-shadow-sm"></i>
         </button>
       )}
 
       {/* Glass Bottom Nav */}
-      <nav className="glass-heavy fixed bottom-0 left-0 right-0 h-[85px] pb-[var(--sab)] flex justify-around items-center px-2 z-50">
+      <nav className="glass-heavy fixed bottom-0 left-0 right-0 h-[85px] pb-[var(--sab)] flex justify-around items-center px-2 z-50 border-t border-white/5">
         <button 
           onClick={() => setCurrentTab('dashboard')}
           className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
         >
-          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'dashboard' ? 'bg-primary text-dark shadow-[0_0_15px_rgba(255,215,0,0.3)] translate-y-[-2px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
-            <i className={`fas fa-chart-pie text-lg`}></i>
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'dashboard' ? 'bg-primary text-dark shadow-[0_0_20px_rgba(255,215,0,0.4)] translate-y-[-4px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
+            <i className={`fas fa-chart-pie text-lg ${currentTab === 'dashboard' ? 'scale-110' : ''}`}></i>
           </div>
-          <span className={`text-[9px] font-bold tracking-widest transition-colors duration-300 ${currentTab === 'dashboard' ? 'text-primary' : 'text-gray-500'}`}>PLAN</span>
+          <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${currentTab === 'dashboard' ? 'text-primary' : 'text-gray-500'}`}>PLAN</span>
         </button>
 
         <button 
           onClick={() => setCurrentTab('progress')}
           className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
         >
-          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'progress' ? 'bg-primary text-dark shadow-[0_0_15px_rgba(255,215,0,0.3)] translate-y-[-2px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
-            <i className={`fas fa-chart-line text-lg`}></i>
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'progress' ? 'bg-primary text-dark shadow-[0_0_20px_rgba(255,215,0,0.4)] translate-y-[-4px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
+            <i className={`fas fa-chart-line text-lg ${currentTab === 'progress' ? 'scale-110' : ''}`}></i>
           </div>
-          <span className={`text-[9px] font-bold tracking-widest transition-colors duration-300 ${currentTab === 'progress' ? 'text-primary' : 'text-gray-500'}`}>LOG</span>
+          <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${currentTab === 'progress' ? 'text-primary' : 'text-gray-500'}`}>LOG</span>
         </button>
 
         <button 
           onClick={() => setCurrentTab('supplements')}
           className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
         >
-          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'supplements' ? 'bg-primary text-dark shadow-[0_0_15px_rgba(255,215,0,0.3)] translate-y-[-2px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
-            <i className={`fas fa-flask text-lg`}></i>
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'supplements' ? 'bg-primary text-dark shadow-[0_0_20px_rgba(255,215,0,0.4)] translate-y-[-4px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
+            <i className={`fas fa-flask text-lg ${currentTab === 'supplements' ? 'scale-110' : ''}`}></i>
           </div>
-          <span className={`text-[9px] font-bold tracking-widest transition-colors duration-300 ${currentTab === 'supplements' ? 'text-primary' : 'text-gray-500'}`}>SUPP</span>
+          <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${currentTab === 'supplements' ? 'text-primary' : 'text-gray-500'}`}>SUPP</span>
         </button>
 
         <button 
           onClick={() => setCurrentTab('profile')}
           className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
         >
-          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'profile' ? 'bg-primary text-dark shadow-[0_0_15px_rgba(255,215,0,0.3)] translate-y-[-2px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
-            <i className={`fas fa-user text-lg`}></i>
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'profile' ? 'bg-primary text-dark shadow-[0_0_20px_rgba(255,215,0,0.4)] translate-y-[-4px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
+            <i className={`fas fa-user text-lg ${currentTab === 'profile' ? 'scale-110' : ''}`}></i>
           </div>
-          <span className={`text-[9px] font-bold tracking-widest transition-colors duration-300 ${currentTab === 'profile' ? 'text-primary' : 'text-gray-500'}`}>YOU</span>
+          <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${currentTab === 'profile' ? 'text-primary' : 'text-gray-500'}`}>YOU</span>
         </button>
       </nav>
     </div>
