@@ -25,6 +25,10 @@ BEGIN
     ALTER TABLE profiles ADD COLUMN IF NOT EXISTS daily_calories INTEGER;
     ALTER TABLE profiles ADD COLUMN IF NOT EXISTS weekly_calories INTEGER;
     ALTER TABLE profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    
+    -- New Fields for V4
+    ALTER TABLE profiles ADD COLUMN IF NOT EXISTS medical_conditions TEXT DEFAULT '';
+    ALTER TABLE profiles ADD COLUMN IF NOT EXISTS goal_aggressiveness TEXT DEFAULT 'normal';
 END $$;
 
 -- Enable Security for Profiles

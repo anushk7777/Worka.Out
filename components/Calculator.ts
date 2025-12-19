@@ -3,7 +3,7 @@ import { UserProfile, MacroPlan, ActivityLevel, Goal, Gender } from "../types";
 import { ACTIVITY_MULTIPLIERS } from "../constants";
 
 // --- ULTRA-ELITE BMR ESTIMATION ENGINE ---
-// Non-Market Grade Inference Logic v3.0 (Corrected & Normalized)
+// Non-Market Grade Inference Logic v3.1 (Aggressiveness Tuned)
 // ----------------------------------------
 
 interface ModelResult {
@@ -121,13 +121,12 @@ export const calculatePlan = (profile: UserProfile, lastWeight?: number, daysSin
     }
   }
 
-  // --- STEP 3.5: WEIGHT NORMALIZATION (CRITICAL FIX) ---
+  // --- STEP 3.5: WEIGHT NORMALIZATION ---
   let totalWeight = 0;
   models.forEach(m => {
      if (m.domainValidity) totalWeight += (weights[m.name] || 0);
   });
 
-  // Renormalize individual weights so they sum to 1.0 strictly
   if (totalWeight > 0) {
       models.forEach(m => {
           if (m.domainValidity && weights[m.name]) {
@@ -143,7 +142,6 @@ export const calculatePlan = (profile: UserProfile, lastWeight?: number, daysSin
   models.forEach(m => {
     if (m.domainValidity) {
        const w = (weights[m.name] || 0);
-       // Note: w is now normalized, so we don't divide by totalWeight later
        if (["Katch-McArdle", "Cunningham"].includes(m.name)) {
            compSum += m.value * w;
            compW += w;
@@ -157,7 +155,6 @@ export const calculatePlan = (profile: UserProfile, lastWeight?: number, daysSin
   const popAvg = popW > 0 ? popSum / popW : 0;
   const compAvg = compW > 0 ? compSum / compW : 0;
 
-  // 1. Age Penalty (Metabolic Drift) - Applied ONLY to Population Component
   let popAvgCorrected = popAvg;
   if (profile.age > 30) {
       const decadesPast30 = (profile.age - 30) / 10;
@@ -165,18 +162,12 @@ export const calculatePlan = (profile: UserProfile, lastWeight?: number, daysSin
       popAvgCorrected *= driftFactor;
   }
 
-  // Re-combine components
-  // BUG FIX 1: Removed division by totalWeight as weights are already normalized
   let trueBmr = (popAvgCorrected * popW) + (compAvg * compW);
 
-  // 2. Athlete Correction
-  // BUG FIX 2: Only apply if NO composition data to avoid double counting LBM activity
   if (phenotype === 'Athlete' && !hasCompositionData) {
       trueBmr *= 1.04; 
   }
 
-  // 3. Obesity Correction
-  // BUG FIX 4: Stronger correction for obese population models
   if (!hasCompositionData && (phenotype === 'Obese' || phenotype === 'Overweight')) {
       trueBmr *= (phenotype === 'Obese' ? 0.95 : 0.97); 
   }
@@ -187,7 +178,6 @@ export const calculatePlan = (profile: UserProfile, lastWeight?: number, daysSin
   const variance = validValues.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / validValues.length;
   const stdDev = Math.sqrt(variance);
 
-  // BUG FIX 5: Tuned uncertainty
   let uncertainty = stdDev * (hasCompositionData ? 1.15 : 1.4);
   if (hasCompositionData) uncertainty += 30; // Measurement error buffer
   if (phenotype === 'Obese' && !hasCompositionData) uncertainty += 60; 
@@ -203,53 +193,63 @@ export const calculatePlan = (profile: UserProfile, lastWeight?: number, daysSin
   const maintenance = trueBmr * multiplier;
 
   let targetCalories = maintenance;
+  const isAggressive = profile.goal_aggressiveness === 'aggressive';
   
-  // Base Goal Logic
+  // Base Goal Logic with Aggressiveness Modifier
   switch (profile.goal) {
     case Goal.FAT_LOSS:
-      if (phenotype === 'Obese') targetCalories = maintenance - 750;
-      else if (phenotype === 'Athlete') targetCalories = maintenance - 400;
-      else targetCalories = maintenance - 500;
+      // Normal: -500 | Aggressive: -750 to -800 (but watch floor)
+      let deficit = 500;
+      if (phenotype === 'Obese') deficit = 750;
+      if (phenotype === 'Athlete') deficit = 400;
+      
+      if (isAggressive) {
+          deficit += 250; // Deep deficit
+      }
+      targetCalories = maintenance - deficit;
       break;
+
     case Goal.MUSCLE_GAIN:
-      if (phenotype === 'Underweight') targetCalories = maintenance + 400;
-      else if (phenotype === 'Athlete') targetCalories = maintenance + 250;
-      else targetCalories = maintenance + 300;
+      // Normal: +300 | Aggressive: +500
+      let surplus = 300;
+      if (phenotype === 'Underweight') surplus = 400;
+      if (phenotype === 'Athlete') surplus = 250;
+
+      if (isAggressive) {
+          surplus += 200; // Hard bulk
+      }
+      targetCalories = maintenance + surplus;
       break;
+
     case Goal.MAINTENANCE:
     default:
       targetCalories = maintenance;
       break;
   }
 
-  // --- STEP 8: ZIG ZAG ADAPTIVE CORRECTION (BUG FIX 3: Time Normalization) ---
+  // --- STEP 8: ZIG ZAG ADAPTIVE CORRECTION ---
   let adaptationReason = undefined;
-  let calculationMethod = "Ultra-Elite Ensemble v3.0";
+  let calculationMethod = "Ultra-Elite Ensemble v3.1";
 
   // Check if we have history to adapt from
   if (lastWeight && profile.daily_calories) {
       const weightDelta = profile.weight - lastWeight; // +ve means gain, -ve means loss
       const previousCalories = profile.daily_calories;
       
-      // Normalize delta to weekly rate if gap is > 7 days
-      // If gap < 7 days, we use the raw delta to catch rapid fluctuations immediately
-      const days = daysSinceLastLog || 7; // Default to 7 if undefined (e.g. manual edit)
+      const days = daysSinceLastLog || 7; 
       const normalizationFactor = 7 / Math.max(days, 7);
       const normalizedDelta = weightDelta * normalizationFactor;
 
       // ADAPTIVE LOGIC FOR FAT LOSS
       if (profile.goal === Goal.FAT_LOSS) {
-          // Rule 1: Gained weight (>0.4kg adjusted weekly) while on Fat Loss plan
           if (normalizedDelta > 0.4) {
               const aggressiveTarget = previousCalories - 350;
-              
               if (aggressiveTarget < targetCalories) {
-                  targetCalories = Math.max(1200, aggressiveTarget); // Safety floor
+                  targetCalories = Math.max(1200, aggressiveTarget); 
                   adaptationReason = "Zig Zag Correction: Weekly gain trend detected. Aggressive deficit applied.";
                   calculationMethod = "Adaptive Zig-Zag (Corrective)";
               }
           }
-          // Rule 2: Losing too fast (<-1.2kg/week). Risk of muscle loss.
           else if (normalizedDelta < -1.2) {
               const recoveryTarget = previousCalories + 250;
               if (recoveryTarget > targetCalories) {
@@ -261,7 +261,6 @@ export const calculatePlan = (profile: UserProfile, lastWeight?: number, daysSin
       
       // ADAPTIVE LOGIC FOR MUSCLE GAIN
       if (profile.goal === Goal.MUSCLE_GAIN) {
-          // Gaining too fast (>0.8kg/week) -> mostly fat.
           if (normalizedDelta > 0.8) {
               const trimTarget = previousCalories - 200;
               if (trimTarget < targetCalories) {
@@ -273,7 +272,8 @@ export const calculatePlan = (profile: UserProfile, lastWeight?: number, daysSin
   }
 
   // Safety Floor Final Check
-  const floor = Math.max(1200, trueBmr - 100);
+  // Aggressive cuts allow going slightly lower but never below BMR-200 or absolute 1200
+  const floor = Math.max(1200, trueBmr - (isAggressive ? 200 : 100));
   if (targetCalories < floor) targetCalories = floor;
 
   // --- MACROS ---
@@ -282,7 +282,10 @@ export const calculatePlan = (profile: UserProfile, lastWeight?: number, daysSin
       proteinWeight = (profile.height - 100) * 1.1; 
   }
 
-  const proteinGrams = Math.round(proteinWeight * 2.2); 
+  // Aggressive cuts require higher protein to spare muscle
+  const proteinMultiplier = isAggressive && profile.goal === Goal.FAT_LOSS ? 2.4 : 2.2;
+  
+  const proteinGrams = Math.round(proteinWeight * proteinMultiplier); 
   const fatGrams = Math.round(profile.weight * 0.85); 
   
   const proteinCals = proteinGrams * 4;

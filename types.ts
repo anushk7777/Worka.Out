@@ -25,11 +25,13 @@ export interface UserProfile {
   gender: Gender;
   activityLevel: ActivityLevel;
   goal: Goal;
-  dietary_preference?: 'veg' | 'egg' | 'non-veg'; // New Field
+  dietary_preference?: 'veg' | 'egg' | 'non-veg';
   bodyFat?: number; // Optional percentage
   daily_calories?: number; // Backend stored target
   weekly_calories?: number; // Backend stored budget
   updated_at?: string; // ISO Timestamp for Zig-Zag normalization
+  medical_conditions?: string; // New: User input for medical context
+  goal_aggressiveness?: 'normal' | 'aggressive'; // New: Rate of change preference
 }
 
 export interface ProgressEntry {

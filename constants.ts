@@ -13,7 +13,7 @@ You are the "MealMan AI", an elite fitness expert specializing in nutrition and 
 2.  **DIET PHILOSOPHY (INDIAN CONTEXT)**:
     *   Primary sources: Roti, Rice, Dal, Paneer, Soya, Chicken (Curry cut), Eggs.
     *   Measurements: ALWAYS in Raw Grams.
-    *   NO Western breakfast defaults (e.g., No Turkey Bacon, No Avocados unless asked).
+    *   NO Western breakfast defaults (e.g. No Turkey Bacon, No Avocados unless asked).
 
 3.  **BEHAVIOR**:
     *   Direct, authoritative, data-driven.
@@ -24,9 +24,9 @@ export const MOTIVATIONAL_QUOTES = [
   "Discipline is doing what needs to be done, even if you don't want to do it.",
   "The only bad workout is the one that didn't happen.",
   "Success starts with self-discipline.",
-  "Your body can stand almost anything. It’s your mind that you have to convince.",
+  "Your body can stand almost anything. It's your mind that you have to convince.",
   "Action is the foundational key to all success.",
-  "Don’t count the days, make the days count.",
+  "Don't count the days, make the days count.",
   "Suffer the pain of discipline, or suffer the pain of regret.",
   "Consistency is what transforms average into excellence.",
   "Motivation gets you going, but discipline keeps you growing.",

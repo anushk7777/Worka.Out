@@ -208,6 +208,10 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
   const totalCalTarget = plan.calories || 2000;
   const calPct = totalCalTarget > 0 ? Math.min(100, Math.round((consumed.cal / totalCalTarget) * 100)) : 0;
 
+  // CHECK FOR PLAN MISMATCH
+  const currentPlanCalories = todayPlan?.macros?.cal || 0;
+  const isPlanMismatch = todayPlan && Math.abs(currentPlanCalories - plan.calories) > 150;
+
   const getTodayDate = () => {
     const d = new Date();
     const year = d.getFullYear();
@@ -676,6 +680,33 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
       <div className="min-h-[450px] relative z-10 pb-12 px-1">
         {activeTab === 'diet' && (
             <div className="space-y-6 animate-slide-up">
+                
+                {/* --- GOAL MISMATCH ALERT --- */}
+                {isPlanMismatch && (
+                    <FadeInItem>
+                        <div className="glass-card bg-yellow-500/5 border-yellow-500/30 p-5 rounded-[32px] flex flex-col sm:flex-row justify-between items-center gap-4 relative overflow-hidden group">
+                           <div className="absolute inset-0 bg-yellow-500/5 animate-pulse-slow"></div>
+                           <div className="relative z-10 flex items-center gap-4">
+                               <div className="w-12 h-12 bg-yellow-500/20 rounded-full flex items-center justify-center border border-yellow-500/40 text-yellow-400">
+                                   <i className="fas fa-exclamation-triangle text-xl"></i>
+                               </div>
+                               <div>
+                                   <h4 className="text-yellow-400 font-black text-sm uppercase tracking-wide">Goal Drift Detected</h4>
+                                   <p className="text-[10px] text-gray-400 font-bold mt-1">
+                                       Current Plan: <span className="text-white">{currentPlanCalories}</span> vs Target: <span className="text-white">{plan.calories}</span> kcal
+                                   </p>
+                               </div>
+                           </div>
+                           <button 
+                               onClick={() => setShowRegenModal(true)} 
+                               className="relative z-10 bg-yellow-500 hover:bg-yellow-400 text-black font-black py-3 px-6 rounded-xl text-[10px] uppercase tracking-[0.2em] transition-all haptic-press shadow-lg shadow-yellow-500/20 flex items-center gap-2"
+                           >
+                               <i className="fas fa-sync-alt"></i> Sync Plan
+                           </button>
+                        </div>
+                    </FadeInItem>
+                )}
+
                 {(!todayPlan && !isSyncing) ? (
                     <FadeInItem>
                         <div className="glass-card p-14 rounded-[48px] text-center border border-white/10 overflow-hidden relative group">
@@ -698,18 +729,20 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                     </FadeInItem>
                 ) : (
                     <div className={`space-y-5 ${generating ? 'opacity-40 pointer-events-none grayscale' : ''}`}>
-                         <div className="flex justify-between items-center px-2">
-                             <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                                Protocol Active
-                             </h3>
-                             <button 
-                                onClick={() => setShowRegenModal(true)}
-                                className="bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-primary px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-2 haptic-press shadow-lg"
-                             >
-                                <i className="fas fa-sliders"></i> Regenerate Plan
-                             </button>
-                         </div>
+                         {!isPlanMismatch && (
+                             <div className="flex justify-between items-center px-2">
+                                 <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                                    Protocol Active
+                                 </h3>
+                                 <button 
+                                    onClick={() => setShowRegenModal(true)}
+                                    className="bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-primary px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-2 haptic-press shadow-lg"
+                                 >
+                                    <i className="fas fa-sliders"></i> Regenerate Plan
+                                 </button>
+                             </div>
+                         )}
 
                          {(todayPlan?.meals || []).map((meal, idx) => (
                             <FadeInItem key={idx} delay={idx * 50}>

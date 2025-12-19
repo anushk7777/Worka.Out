@@ -42,7 +42,7 @@ export const generateTrainerResponse = async (
     const model = 'gemini-3-pro-preview';
     let contextPrompt = SYSTEM_PROMPT;
     if (userProfile) {
-      contextPrompt += `\n\n=== CLIENT PROFILE ===\nName: ${userProfile.name}\nAge: ${userProfile.age}\nGoal: ${userProfile.goal}\nActivity: ${userProfile.activityLevel}\nCurrent Weight: ${userProfile.weight}kg`;
+      contextPrompt += `\n\n=== CLIENT PROFILE ===\nName: ${userProfile.name}\nAge: ${userProfile.age}\nGoal: ${userProfile.goal}\nActivity: ${userProfile.activityLevel}\nCurrent Weight: ${userProfile.weight}kg\nConditions: ${userProfile.medical_conditions || 'None'}\nIntensity: ${userProfile.goal_aggressiveness || 'normal'}`;
     }
 
     const contents = [
@@ -203,11 +203,15 @@ export const generateDailyMealPlan = async (
 ): Promise<DailyMealPlanDB> => {
     const foodDB = getFoodDBContext();
     const effectiveCalories = customCalorieTarget || macros.calories;
+    const aggressiveness = profile.goal_aggressiveness === 'aggressive' ? "AGGRESSIVE/ACCELERATED (Strict Compliance Required)" : "SUSTAINABLE (Balanced)";
+    const medical = profile.medical_conditions ? `MEDICAL CONDITIONS: ${profile.medical_conditions}. AVOID CONTRAINDICATED FOODS.` : "No medical conditions.";
     
     const prompt = `
       Create a meal plan for ${dateStr} at ${effectiveCalories} kcal.
       Protein: ${macros.protein}g | Carbs: ${macros.carbs}g | Fats: ${macros.fats}g
       Diet Type: ${dietType}. Preferences: ${preferences}.
+      Intensity: ${aggressiveness}.
+      ${medical}
       ${contextNote ? `Special Context: ${contextNote}` : ''}
       Use the following database context for calorie/macro values:
       ${foodDB}
@@ -306,8 +310,9 @@ export const addFoodItem = async (currentPlan: DailyMealPlanDB, userDescription:
 export const generateSupplementStack = async (profile: UserProfile): Promise<SupplementRecommendation[]> => {
     const prompt = `
       Design a targeted supplement protocol. 
-      Goal: ${profile.goal}
+      Goal: ${profile.goal} (Intensity: ${profile.goal_aggressiveness || 'Normal'})
       Dietary Restriction: ${profile.dietary_preference}
+      Medical Context: ${profile.medical_conditions || 'None'}
       Activity Level: ${profile.activityLevel}
       
       CRITICAL: Keep descriptions extremely concise (max 100 characters). 

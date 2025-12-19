@@ -3,24 +3,24 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, Goal, ActivityLevel } from '../types';
 import { supabase } from '../services/supabaseClient';
 import { calculatePlan } from './Calculator';
-import { generateDailyMealPlan } from '../services/geminiService';
 
 interface Props {
   profile: UserProfile;
   onUpdateProfile: (updatedProfile: UserProfile) => void;
   onSignOut: () => void;
-  onPlanRegenerated?: () => void; // New callback
+  onPlanRegenerated?: () => void;
 }
 
-const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut, onPlanRegenerated }) => {
+const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut }) => {
   const [formData, setFormData] = useState<UserProfile>({
       ...profile,
-      dietary_preference: profile.dietary_preference || 'non-veg'
+      dietary_preference: profile.dietary_preference || 'non-veg',
+      goal_aggressiveness: profile.goal_aggressiveness || 'normal',
+      medical_conditions: profile.medical_conditions || ''
   });
   const [loading, setLoading] = useState(false);
-  const [regenLoading, setRegenLoading] = useState(false);
-  const [showRegen, setShowRegen] = useState(false);
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
+  const [showRiskModal, setShowRiskModal] = useState(false);
   
   // PWA Install State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -29,7 +29,9 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
   useEffect(() => {
     setFormData({
         ...profile,
-        dietary_preference: profile.dietary_preference || 'non-veg'
+        dietary_preference: profile.dietary_preference || 'non-veg',
+        goal_aggressiveness: profile.goal_aggressiveness || 'normal',
+        medical_conditions: profile.medical_conditions || ''
     });
   }, [profile]);
 
@@ -68,29 +70,27 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
   const handleChange = (field: keyof UserProfile, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setMessage(null);
-    setShowRegen(false);
   };
 
-  // Helper to match Dashboard's local date logic exactly
-  const getLocalISODate = () => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+  const handlePreSave = () => {
+      // If user is switching to Aggressive, warn them first
+      if (formData.goal_aggressiveness === 'aggressive' && profile.goal_aggressiveness !== 'aggressive') {
+          setShowRiskModal(true);
+      } else {
+          handleSaveProfile();
+      }
   };
 
-  // Consolidated function to save profile AND regenerate plan if needed
-  const handleSaveAndRegenerate = async () => {
+  const handleSaveProfile = async () => {
     setLoading(true);
     setMessage(null);
-    setShowRegen(false);
+    setShowRiskModal(false);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No user found");
 
-      // 1. Calculate New Macros (Fresh start, no history weighting)
+      // 1. Calculate New Macros (Fresh start based on new stats & aggressiveness)
       const newMacros = calculatePlan(formData);
       
       // 2. Update Profile in DB
@@ -103,6 +103,11 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
         goal: formData.goal,
         activity_level: formData.activityLevel,
         dietary_preference: formData.dietary_preference,
+        
+        // New Fields
+        medical_conditions: formData.medical_conditions,
+        goal_aggressiveness: formData.goal_aggressiveness,
+
         daily_calories: newMacros.calories,
         weekly_calories: newMacros.calories * 7,
         updated_at: new Date().toISOString()
@@ -112,44 +117,13 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
       if (error) throw error;
 
       // Update Local State immediately
-      onUpdateProfile({ ...formData, daily_calories: newMacros.calories, weekly_calories: newMacros.calories * 7 });
+      onUpdateProfile({ 
+          ...formData, 
+          daily_calories: newMacros.calories, 
+          weekly_calories: newMacros.calories * 7 
+      });
       
-      // 3. AUTO-REGENERATE PLAN (Implicitly done to fix user workflow)
-      setMessage({ text: "Profile Saved. Calculating New Portions...", type: 'success' });
-      
-      try {
-          // Use local date to match Dashboard
-          const today = getLocalISODate();
-          
-          const newPlan = await generateDailyMealPlan(
-              formData, 
-              newMacros, // Pass NEW macro targets
-              today, 
-              [], 
-              "GOAL CHANGED: Automatic Plan Adjustment based on new profile settings.",
-              formData.dietary_preference as any
-          );
-
-          const { error: planError } = await supabase.from('daily_meal_plans').upsert({ 
-              user_id: user.id, 
-              date: today, 
-              meals: newPlan.meals, 
-              macros: newPlan.macros 
-          }, { onConflict: 'user_id, date' });
-
-          if (planError) throw planError;
-          
-          // Signal App to update dashboard version
-          if (onPlanRegenerated) {
-              onPlanRegenerated();
-          }
-          setMessage({ text: "Success! Diet Plan Updated to new Calories.", type: 'success' });
-
-      } catch (planErr) {
-          console.error("Auto-regen failed:", planErr);
-          setMessage({ text: "Profile saved, but Diet Plan update failed. Try manually.", type: 'error' });
-          setShowRegen(true); // Fallback to manual button if auto fails
-      }
+      setMessage({ text: "Profile & Intensity Updated. Check Dashboard to sync your meal plan.", type: 'success' });
 
     } catch (err: any) {
       console.error(err);
@@ -170,7 +144,41 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
   };
 
   return (
-    <div className="p-4 pb-32 space-y-8 animate-fade-in">
+    <div className="p-4 pb-32 space-y-8 animate-fade-in relative">
+      
+      {/* RISK WARNING MODAL */}
+      {showRiskModal && (
+          <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-6 backdrop-blur-xl animate-fade-in">
+              <div className="bg-red-950/30 border border-red-500/50 rounded-[40px] p-8 w-full max-w-sm shadow-[0_0_60px_rgba(220,38,38,0.3)] animate-shake relative">
+                  <div className="w-16 h-16 rounded-full bg-red-500/20 border border-red-500 flex items-center justify-center mx-auto mb-6">
+                      <i className="fas fa-biohazard text-3xl text-red-500"></i>
+                  </div>
+                  <h3 className="text-2xl font-black text-white text-center mb-4 uppercase tracking-tighter">Bio-Metric Warning</h3>
+                  <div className="space-y-4 text-xs text-gray-300 font-medium leading-relaxed bg-black/40 p-4 rounded-2xl border border-white/5">
+                      <p><strong className="text-red-400">1. Metabolic Adaptation:</strong> Aggressive deficits can downregulate T3 thyroid hormone, slowing metabolism.</p>
+                      <p><strong className="text-red-400">2. Lean Mass Risk:</strong> Accelerated fat loss increases the risk of muscle catabolism. High protein is non-negotiable.</p>
+                      <p><strong className="text-red-400">3. Hormonal Impact:</strong> May temporarily suppress testosterone/estrogen and increase cortisol.</p>
+                  </div>
+                  <p className="text-center text-[10px] text-gray-500 mt-4 uppercase tracking-widest">Do you accept these physiological risks?</p>
+                  
+                  <div className="grid grid-cols-2 gap-4 mt-6">
+                      <button 
+                        onClick={() => { setShowRiskModal(false); handleChange('goal_aggressiveness', 'normal'); }}
+                        className="py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-gray-400 font-bold text-xs uppercase tracking-wider"
+                      >
+                          Cancel
+                      </button>
+                      <button 
+                        onClick={handleSaveProfile}
+                        className="py-4 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-red-600/20"
+                      >
+                          I Confirm
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-center">
           <div>
@@ -205,63 +213,73 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
          </div>
       </div>
 
-      {/* PWA INSTALL SECTION */}
-      {!isAppInstalled && (
-        <div className="space-y-3 pt-4 border-t border-white/10">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest ml-1">App Installation</h3>
-            
-            {deferredPrompt ? (
-                <button 
-                    onClick={handleInstallClick}
-                    className="w-full bg-gradient-to-r from-blue-600 to-cyan-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-3 border-t border-white/20"
-                >
-                    <i className="fas fa-download animate-bounce"></i> Install App to Home Screen
-                </button>
-            ) : (
-                <div className="bg-black/20 p-4 rounded-2xl border border-white/5 text-center">
-                    <p className="text-[10px] text-gray-400 leading-relaxed font-medium">
-                        Install for a better experience: <br/>
-                        Tap <i className="fas fa-ellipsis-v mx-1 text-white"></i> (Android) or <i className="fas fa-share-square mx-1 text-white"></i> (iOS) <br/>
-                        and select <strong>"Add to Home Screen"</strong>.
-                    </p>
-                </div>
-            )}
-        </div>
-      )}
-
       <div className="space-y-8 animate-slide-up">
           
-          {/* GOAL SLIDER */}
+          {/* MEDICAL CONDITIONS INPUT */}
           <div className="space-y-3">
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1 flex items-center gap-2">
-                  <i className="fas fa-crosshairs text-primary"></i> Current Goal
+                  <i className="fas fa-notes-medical text-red-400"></i> Medical Context
               </label>
-              
-              <div className="relative bg-black/40 backdrop-blur-md rounded-2xl p-1.5 flex justify-between items-center border border-white/5 h-14 select-none">
-                  {/* Sliding Pill */}
-                  <div 
-                    className="absolute top-1.5 bottom-1.5 bg-gradient-to-r from-primary to-yellow-500 rounded-xl shadow-lg shadow-primary/20 transition-all duration-500 ease-spring gpu"
-                    style={{
-                        transform: `translateX(${currentGoalIndex * 100}%)`,
-                        width: `${100 / goals.length}%`,
-                    }}
-                  ></div>
+              <div className="relative">
+                  <textarea
+                      value={formData.medical_conditions}
+                      onChange={(e) => handleChange('medical_conditions', e.target.value)}
+                      placeholder="E.g. Diabetes Type 2, Hypertensive, Peanut Allergy, Knee Injury..."
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm text-white focus:border-red-400/50 outline-none h-24 placeholder-gray-600 font-medium resize-none shadow-inner" 
+                  />
+                  <div className="absolute bottom-3 right-3 text-[9px] text-gray-600 uppercase font-black tracking-wider pointer-events-none">
+                      AI Safety Filter Active
+                  </div>
+              </div>
+          </div>
 
-                  {goals.map((g, idx) => (
-                      <button
-                          key={g}
-                          onClick={() => handleChange('goal', g)}
-                          className={`flex-1 relative z-10 h-full text-[11px] font-bold uppercase tracking-wide transition-colors duration-300 flex items-center justify-center ${
-                              formData.goal === g ? 'text-black' : 'text-gray-500 hover:text-gray-300'
-                          }`}
-                          style={{width: `${100/goals.length}%`}}
+          {/* GOAL & INTENSITY SECTION */}
+          <div className="space-y-4 bg-white/[0.02] p-4 rounded-3xl border border-white/5">
+              {/* GOAL SLIDER */}
+              <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 block">Objective</label>
+                  <div className="relative bg-black/40 backdrop-blur-md rounded-2xl p-1.5 flex justify-between items-center border border-white/5 h-14 select-none">
+                      <div 
+                        className="absolute top-1.5 bottom-1.5 bg-gradient-to-r from-primary to-yellow-500 rounded-xl shadow-lg shadow-primary/20 transition-all duration-500 ease-spring gpu"
+                        style={{ transform: `translateX(${currentGoalIndex * 100}%)`, width: `${100 / goals.length}%` }}
+                      ></div>
+                      {goals.map((g) => (
+                          <button
+                              key={g}
+                              onClick={() => handleChange('goal', g)}
+                              className={`flex-1 relative z-10 h-full text-[10px] font-black uppercase tracking-wide transition-colors duration-300 flex items-center justify-center ${formData.goal === g ? 'text-black' : 'text-gray-500 hover:text-gray-300'}`}
+                              style={{width: `${100/goals.length}%`}}
+                          >
+                              {g === 'Fat Loss' && <i className="fas fa-fire mr-1.5"></i>}
+                              {g === 'Muscle Gain' && <i className="fas fa-dumbbell mr-1.5"></i>}
+                              {g === 'Maintenance / Recomp' && <i className="fas fa-balance-scale mr-1.5"></i>}
+                              {g === 'Maintenance / Recomp' ? 'Recomp' : g}
+                          </button>
+                      ))}
+                  </div>
+              </div>
+
+              {/* INTENSITY TOGGLE */}
+              <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 block">Protocol Intensity</label>
+                  <div className="flex gap-3">
+                      <button 
+                          onClick={() => handleChange('goal_aggressiveness', 'normal')}
+                          className={`flex-1 py-4 rounded-2xl border flex flex-col items-center justify-center transition-all ${formData.goal_aggressiveness === 'normal' ? 'bg-green-500/10 border-green-500 text-green-400 shadow-[0_0_20px_rgba(34,197,94,0.1)]' : 'bg-black/40 border-white/5 text-gray-500'}`}
                       >
-                          {g === 'Fat Loss' && <i className="fas fa-fire mr-1.5"></i>}
-                          {g === 'Muscle Gain' && <i className="fas fa-dumbbell mr-1.5"></i>}
-                          {g === 'Maintenance / Recomp' && <i className="fas fa-balance-scale mr-1.5"></i>}
-                          {g === 'Maintenance / Recomp' ? 'Recomp' : g}
+                          <span className="text-[10px] uppercase font-black tracking-widest">Sustainable</span>
+                          <span className="text-[9px] mt-1 opacity-70">Recommended</span>
                       </button>
-                  ))}
+                      <button 
+                          onClick={() => handleChange('goal_aggressiveness', 'aggressive')}
+                          className={`flex-1 py-4 rounded-2xl border flex flex-col items-center justify-center transition-all ${formData.goal_aggressiveness === 'aggressive' ? 'bg-red-500/10 border-red-500 text-red-400 shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'bg-black/40 border-white/5 text-gray-500'}`}
+                      >
+                          <span className="text-[10px] uppercase font-black tracking-widest flex items-center gap-1">
+                              Accelerated <i className="fas fa-bolt text-[9px]"></i>
+                          </span>
+                          <span className="text-[9px] mt-1 opacity-70">High Risk</span>
+                      </button>
+                  </div>
               </div>
           </div>
 
@@ -272,26 +290,20 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
               </label>
               
               <div className="relative bg-black/40 backdrop-blur-md rounded-2xl p-1.5 flex justify-between items-center border border-white/5 h-16 select-none">
-                  {/* Sliding Pill */}
                   <div 
                     className={`absolute top-1.5 bottom-1.5 rounded-xl shadow-lg transition-all duration-500 ease-spring gpu ${
                         formData.dietary_preference === 'veg' ? 'bg-green-500 shadow-green-500/20' : 
                         formData.dietary_preference === 'egg' ? 'bg-yellow-500 shadow-yellow-500/20' : 
                         'bg-red-500 shadow-red-500/20'
                     }`}
-                    style={{
-                        transform: `translateX(${currentDietIndex * 100}%)`,
-                        width: `${100 / diets.length}%`,
-                    }}
+                    style={{ transform: `translateX(${currentDietIndex * 100}%)`, width: `${100 / diets.length}%` }}
                   ></div>
 
                   {diets.map((type) => (
                       <button
                           key={type}
                           onClick={() => handleChange('dietary_preference', type)}
-                          className={`flex-1 relative z-10 h-full flex flex-col items-center justify-center transition-colors duration-300 ${
-                              formData.dietary_preference === type ? 'text-white' : 'text-gray-500 hover:text-gray-300'
-                          }`}
+                          className={`flex-1 relative z-10 h-full flex flex-col items-center justify-center transition-colors duration-300 ${formData.dietary_preference === type ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                           style={{width: `${100/diets.length}%`}}
                       >
                           <i className={`fas ${type === 'veg' ? 'fa-leaf' : type === 'egg' ? 'fa-egg' : 'fa-drumstick-bite'} text-lg mb-0.5 ${formData.dietary_preference === type ? 'scale-110' : ''} transition-transform`}></i>
@@ -310,25 +322,16 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
                   {Object.values(ActivityLevel).map(level => {
                       const { title, desc } = parseActivity(level);
                       const isSelected = formData.activityLevel === level;
-                      
                       return (
                         <button
                           key={level}
                           onClick={() => handleChange('activityLevel', level)}
-                          className={`w-full text-left p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden group active:scale-[0.98] ${
-                             isSelected 
-                               ? 'bg-blue-600/10 border-blue-500/50 shadow-[0_0_20px_rgba(37,99,235,0.15)]' 
-                               : 'bg-black/20 border-white/5 hover:bg-white/5 hover:border-white/10'
-                          }`}
+                          className={`w-full text-left p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden group active:scale-[0.98] ${isSelected ? 'bg-blue-600/10 border-blue-500/50 shadow-[0_0_20px_rgba(37,99,235,0.15)]' : 'bg-black/20 border-white/5 hover:bg-white/5 hover:border-white/10'}`}
                         >
                              <div className="flex justify-between items-center relative z-10">
                                 <div>
-                                    <div className={`font-bold text-sm mb-1 ${isSelected ? 'text-blue-400' : 'text-gray-300'}`}>
-                                        {title}
-                                    </div>
-                                    <div className="text-[11px] text-gray-500 font-medium">
-                                        {desc}
-                                    </div>
+                                    <div className={`font-bold text-sm mb-1 ${isSelected ? 'text-blue-400' : 'text-gray-300'}`}>{title}</div>
+                                    <div className="text-[11px] text-gray-500 font-medium">{desc}</div>
                                 </div>
                                 {isSelected && (
                                     <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center shadow-lg animate-fade-in">
@@ -342,10 +345,9 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
               </div>
           </div>
 
-          {/* FIXED: Removed sticky positioning to prevent floating over content */}
           <div className="pt-8 space-y-3">
               <button 
-                  onClick={handleSaveAndRegenerate}
+                  onClick={handlePreSave}
                   disabled={loading}
                   className="w-full bg-white text-black font-black py-4 rounded-2xl shadow-2xl shadow-white/10 hover:bg-gray-200 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 text-sm uppercase tracking-wider relative overflow-hidden"
               >
@@ -353,50 +355,16 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
                        <i className="fas fa-circle-notch fa-spin"></i>
                   ) : (
                        <>
-                         <span className="relative z-10">Save Settings & Update Plan</span>
+                         <span className="relative z-10">Save Profile & Recalculate</span>
                          <i className="fas fa-save relative z-10"></i>
                        </>
                   )}
               </button>
-
-              {/* Retry Button only shows if Auto-Regen Fails */}
-              {showRegen && (
-                  <button 
-                    onClick={async () => {
-                        setRegenLoading(true);
-                        // Re-run the manual regen logic if needed
-                        try {
-                           const { data: { user } } = await supabase.auth.getUser();
-                           if (!user) throw new Error("No user");
-                           const today = getLocalISODate();
-                           const macros = calculatePlan(formData);
-                           const newPlan = await generateDailyMealPlan(
-                              formData, macros, today, [], 
-                              "Manual Retry", formData.dietary_preference as any
-                           );
-                           await supabase.from('daily_meal_plans').upsert({ user_id: user.id, date: today, meals: newPlan.meals, macros: newPlan.macros }, { onConflict: 'user_id, date' });
-                           if (onPlanRegenerated) onPlanRegenerated();
-                           setMessage({ text: "Plan Updated!", type: 'success' });
-                           setShowRegen(false);
-                        } catch(e) { console.error(e); }
-                        setRegenLoading(false);
-                    }}
-                    disabled={regenLoading}
-                    className="w-full bg-red-500 text-white font-bold py-3 rounded-2xl shadow-lg animate-fade-in-up flex items-center justify-center gap-2 active:scale-95 transition-transform"
-                  >
-                      {regenLoading ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-redo"></i>}
-                      Retry Plan Update
-                  </button>
-              )}
           </div>
 
           {message && (
-              <div className={`p-4 rounded-2xl border text-sm flex items-start gap-3 animate-slide-up ${
-                  message.type === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-200' : 'bg-red-500/10 border-red-500/30 text-red-200'
-              }`}>
-                  <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                       message.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-                  }`}>
+              <div className={`p-4 rounded-2xl border text-sm flex items-start gap-3 animate-slide-up ${message.type === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-200' : 'bg-red-500/10 border-red-500/30 text-red-200'}`}>
+                  <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${message.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
                       <i className={`fas ${message.type === 'success' ? 'fa-check' : 'fa-exclamation'} text-[10px]`}></i>
                   </div>
                   <p className="leading-tight">{message.text}</p>
