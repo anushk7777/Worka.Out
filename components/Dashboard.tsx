@@ -19,54 +19,88 @@ interface Props {
 }
 
 type DietType = 'veg' | 'egg' | 'non-veg';
+type TimePhase = 'morning' | 'noon' | 'evening' | 'night';
 
-// --- SUB-COMPONENTS FOR ANIMATIONS ---
+// --- SUB-COMPONENTS FOR CONTEXTUAL ANIMATIONS ---
 
-// 1. Sunrise Component (AM Mode) - Darker, higher contrast version
-const SunriseComponent = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#0c1220]">
-    {/* Deep Atmospheric Base */}
-    <div className="absolute inset-0 bg-gradient-to-b from-[#0F172A] via-[#1E1B4B] to-[#311313] opacity-80"></div>
+// 1. Morning: Rising Sun (5 AM - 11 AM)
+const MorningComponent = () => (
+  <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#0F172A]">
+    {/* Atmospheric Base: Cool dawn blues */}
+    <div className="absolute inset-0 bg-gradient-to-b from-[#0f172a] via-[#1e3a8a] to-[#7c2d12] opacity-90"></div>
     
-    {/* Rising Sun Glow - Lowered opacity and darker hues for text contrast */}
-    <div className="absolute -bottom-10 -left-10 w-56 h-56 bg-gradient-to-tr from-orange-600 via-red-500 to-transparent rounded-full blur-[60px] animate-sunrise opacity-60"></div>
+    {/* Rising Sun Glow */}
+    <div className="absolute -bottom-16 -left-10 w-72 h-72 bg-gradient-to-tr from-orange-500 via-yellow-500 to-transparent rounded-full blur-[70px] animate-sunrise opacity-70"></div>
     
-    {/* Horizon Light */}
-    <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-orange-900/40 to-transparent"></div>
-    
-    {/* Text Protection Gradient (Top Down) */}
-    <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/10"></div>
+    {/* Light Rays */}
+    <div className="absolute bottom-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-yellow-200/10 via-transparent to-transparent animate-pulse-slow"></div>
+
+    {/* Text Protection */}
+    <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/20"></div>
   </div>
 );
 
-// 2. Moon Phase Component (PM Mode) - Deep Night
-const MoonPhaseComponent = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#050b14]">
+// 2. Noon: Bright & Vibrant (11 AM - 4 PM)
+const NoonComponent = () => (
+  <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#0ea5e9]">
+    {/* Sky Gradient */}
+    <div className="absolute inset-0 bg-gradient-to-br from-[#0284c7] via-[#38bdf8] to-[#bae6fd]"></div>
+    
+    {/* Intense Sun Overhead */}
+    <div className="absolute -top-10 -right-10 w-64 h-64 bg-yellow-300 rounded-full blur-[50px] opacity-60 animate-pulse-slow"></div>
+    <div className="absolute top-[-20px] right-[-20px] w-40 h-40 bg-gradient-to-br from-yellow-100 to-yellow-400 rounded-full shadow-[0_0_60px_rgba(253,224,71,0.6)]"></div>
+
+    {/* Lens Flare / Glare effect */}
+    <div className="absolute top-1/2 left-1/4 w-32 h-32 bg-white/10 rounded-full blur-[40px] mix-blend-overlay"></div>
+
+    {/* Text Protection (Crucial for Noon brightness) */}
+    <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/10 to-transparent"></div>
+  </div>
+);
+
+// 3. Evening: Warm Sunset (4 PM - 8 PM)
+const EveningComponent = () => (
+  <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#4c1d95]">
+    {/* Sunset Gradient: Purple -> Red -> Orange */}
+    <div className="absolute inset-0 bg-gradient-to-br from-[#312e81] via-[#701a75] to-[#ea580c]"></div>
+    
+    {/* Setting Sun */}
+    <div className="absolute bottom-10 -right-10 w-56 h-56 bg-gradient-to-t from-orange-600 via-red-500 to-transparent rounded-full blur-[50px] opacity-80 animate-pulse-slow"></div>
+    
+    {/* Horizon Line */}
+    <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/40 to-transparent"></div>
+
+    {/* Text Protection */}
+    <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/20"></div>
+  </div>
+);
+
+// 4. Night: Deep Blues & Stars (8 PM - 5 AM)
+const NightComponent = () => (
+  <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#020617]">
+    {/* Deep Space Gradient */}
     <div className="absolute inset-0 bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#1e1b4b]"></div>
     
-    {/* Moon Glow */}
-    <div className="absolute top-4 right-4 w-32 h-32 bg-indigo-500/10 rounded-full blur-[40px]"></div>
-    
     {/* Moon Orb */}
-    <div className="absolute top-[-20px] right-[-20px] w-40 h-40 bg-gray-300 rounded-full shadow-[0_0_50px_rgba(199,210,254,0.15)] animate-moonrise opacity-90">
-       <div className="absolute inset-0 rounded-full bg-gradient-to-br from-transparent to-black/20"></div>
+    <div className="absolute top-8 right-8 w-24 h-24 bg-gray-200 rounded-full shadow-[0_0_40px_rgba(255,255,255,0.1)] animate-moonrise opacity-90">
+       <div className="absolute inset-0 rounded-full bg-gradient-to-br from-transparent to-black/30"></div>
        {/* Craters */}
-       <div className="absolute top-10 left-8 w-6 h-6 bg-[#94a3b8] rounded-full opacity-30"></div>
-       <div className="absolute top-20 left-20 w-8 h-8 bg-[#94a3b8] rounded-full opacity-20"></div>
-       <div className="absolute bottom-10 right-10 w-4 h-4 bg-[#94a3b8] rounded-full opacity-30"></div>
+       <div className="absolute top-4 left-3 w-4 h-4 bg-[#94a3b8] rounded-full opacity-30"></div>
+       <div className="absolute top-10 left-10 w-6 h-6 bg-[#94a3b8] rounded-full opacity-20"></div>
     </div>
     
-    {/* Stars */}
+    {/* Twinkling Stars */}
     <div className="absolute top-10 left-10 w-0.5 h-0.5 bg-white rounded-full animate-twinkle shadow-[0_0_4px_white]"></div>
     <div className="absolute top-24 left-1/3 w-1 h-1 bg-white/70 rounded-full animate-twinkle delay-75"></div>
     <div className="absolute bottom-1/3 right-1/2 w-0.5 h-0.5 bg-white/50 rounded-full animate-twinkle delay-150"></div>
+    <div className="absolute top-1/2 left-10 w-1 h-1 bg-white/80 rounded-full animate-twinkle delay-300"></div>
     
     {/* Text Protection */}
-    <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/20 to-transparent"></div>
+    <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent"></div>
   </div>
 );
 
-// 3. Typewriter Text Component
+// Typewriter Text Component
 const TypewriterText = ({ text }: { text: string }) => {
   const [displayedText, setDisplayedText] = useState('');
   const index = useRef(0);
@@ -231,15 +265,30 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
     return `${year}-${month}-${day}`;
   };
 
-  // Determine Greeting & AM/PM
+  // Determine Greeting & Time Phase
   const currentHour = new Date().getHours();
-  const isAM = currentHour >= 5 && currentHour < 18;
   
-  const getGreetingText = () => {
-    if (currentHour < 12) return 'Good Morning';
-    if (currentHour < 18) return 'Good Afternoon';
-    return 'Good Evening';
-  };
+  let timePhase: TimePhase = 'night';
+  let greetingText = 'Good Evening';
+  let PhaseIcon = <i className="fas fa-moon text-indigo-300"></i>;
+
+  if (currentHour >= 5 && currentHour < 11) {
+      timePhase = 'morning';
+      greetingText = 'Good Morning';
+      PhaseIcon = <i className="fas fa-sun text-orange-300"></i>;
+  } else if (currentHour >= 11 && currentHour < 16) {
+      timePhase = 'noon';
+      greetingText = 'Good Afternoon';
+      PhaseIcon = <i className="fas fa-sun text-yellow-300"></i>;
+  } else if (currentHour >= 16 && currentHour < 20) {
+      timePhase = 'evening';
+      greetingText = 'Good Evening';
+      PhaseIcon = <i className="fas fa-cloud-sun text-orange-400"></i>;
+  } else {
+      timePhase = 'night';
+      greetingText = 'Good Night';
+      PhaseIcon = <i className="fas fa-moon text-indigo-300"></i>;
+  }
 
   useEffect(() => { 
       if (refreshTrigger && refreshTrigger > 0) {
@@ -605,23 +654,26 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
           </div>
       )}
 
-      {/* --- NEW HEADER IMPLEMENTATION WITH AM/PM ANIMATIONS --- */}
+      {/* --- NEW HEADER IMPLEMENTATION WITH CONTEXTUAL ANIMATIONS --- */}
       <header className="relative mb-8 p-6 overflow-hidden rounded-[32px] glass-card border border-white/10 group">
         {/* Ambient Background Layer */}
-        {isAM ? <SunriseComponent /> : <MoonPhaseComponent />}
+        {timePhase === 'morning' && <MorningComponent />}
+        {timePhase === 'noon' && <NoonComponent />}
+        {timePhase === 'evening' && <EveningComponent />}
+        {timePhase === 'night' && <NightComponent />}
 
         {/* Content Layer */}
         <div className="relative z-10">
             <div className="flex justify-between items-start">
                 <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-primary/80 mb-2 flex items-center gap-2">
-                        {isAM ? <i className="fas fa-sun text-orange-400"></i> : <i className="fas fa-moon text-indigo-300"></i>}
-                        {getGreetingText()}
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/80 mb-2 flex items-center gap-2 drop-shadow-md">
+                        {PhaseIcon}
+                        {greetingText}
                     </p>
-                    <h1 className="text-4xl font-black text-white tracking-tighter drop-shadow-md">{profile.name.split(' ')[0]}</h1>
+                    <h1 className="text-4xl font-black text-white tracking-tighter drop-shadow-lg">{profile.name.split(' ')[0]}</h1>
                 </div>
-                <button onClick={() => onNavigate('profile')} className="w-14 h-14 rounded-[24px] bg-white/[0.05] border border-white/10 flex items-center justify-center transition-all haptic-press hover:bg-white/[0.1] shadow-lg inner-glow">
-                    <i className="fas fa-fingerprint text-primary text-2xl"></i>
+                <button onClick={() => onNavigate('profile')} className="w-14 h-14 rounded-[24px] bg-white/[0.1] border border-white/20 flex items-center justify-center transition-all haptic-press hover:bg-white/[0.2] shadow-lg inner-glow">
+                    <i className="fas fa-fingerprint text-white text-2xl drop-shadow-md"></i>
                 </button>
             </div>
             
@@ -636,11 +688,13 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
          
          <div className="relative z-10">
             <div className="mb-10">
-                <div className="flex items-baseline gap-3">
-                    <span className={`text-8xl font-black tracking-tighter transition-all duration-700 ${consumed.cal > totalCalTarget ? 'text-red-500 drop-shadow-[0_0_20px_rgba(239,68,68,0.4)]' : 'text-white'}`}>{consumed.cal}</span>
-                    <div className="flex flex-col mb-2">
-                      <span className="text-gray-500 font-black text-2xl tracking-tighter leading-none">/ {totalCalTarget}</span>
-                      <span className="text-primary text-[10px] font-black uppercase tracking-[0.2em] mt-2 bg-primary/5 px-2 py-0.5 rounded-md border border-primary/10">Metabolic Unit</span>
+                <div className="flex flex-wrap items-baseline gap-2 sm:gap-3">
+                    <span className={`text-6xl sm:text-7xl lg:text-8xl font-black tracking-tighter transition-all duration-700 ${consumed.cal > totalCalTarget ? 'text-red-500 drop-shadow-[0_0_20px_rgba(239,68,68,0.4)]' : 'text-white'}`}>
+                        {Math.round(consumed.cal)}
+                    </span>
+                    <div className="flex flex-col mb-1 sm:mb-2">
+                      <span className="text-gray-500 font-black text-xl sm:text-2xl tracking-tighter leading-none">/ {totalCalTarget}</span>
+                      <span className="text-primary text-[10px] font-black uppercase tracking-[0.2em] mt-1 sm:mt-2 bg-primary/5 px-2 py-0.5 rounded-md border border-primary/10 w-fit">Metabolic Unit</span>
                     </div>
                 </div>
                 {/* Liquid Tube Tracker */}
