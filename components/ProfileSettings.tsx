@@ -21,6 +21,10 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
   const [regenLoading, setRegenLoading] = useState(false);
   const [showRegen, setShowRegen] = useState(false);
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
+  
+  // PWA Install State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isAppInstalled, setIsAppInstalled] = useState(false);
 
   useEffect(() => {
     setFormData({
@@ -28,6 +32,34 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
         dietary_preference: profile.dietary_preference || 'non-veg'
     });
   }, [profile]);
+
+  // PWA Install Logic
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsAppInstalled(true);
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    }
+  };
 
   // Safe BMI Calculation
   const hM = formData.height / 100;
@@ -171,6 +203,30 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
             </div>
          </div>
       </div>
+
+      {/* PWA INSTALL SECTION */}
+      {!isAppInstalled && (
+        <div className="space-y-3 pt-4 border-t border-white/10">
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest ml-1">App Installation</h3>
+            
+            {deferredPrompt ? (
+                <button 
+                    onClick={handleInstallClick}
+                    className="w-full bg-gradient-to-r from-blue-600 to-cyan-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-3 border-t border-white/20"
+                >
+                    <i className="fas fa-download animate-bounce"></i> Install App to Home Screen
+                </button>
+            ) : (
+                <div className="bg-black/20 p-4 rounded-2xl border border-white/5 text-center">
+                    <p className="text-[10px] text-gray-400 leading-relaxed font-medium">
+                        Install for a better experience: <br/>
+                        Tap <i className="fas fa-ellipsis-v mx-1 text-white"></i> (Android) or <i className="fas fa-share-square mx-1 text-white"></i> (iOS) <br/>
+                        and select <strong>"Add to Home Screen"</strong>.
+                    </p>
+                </div>
+            )}
+        </div>
+      )}
 
       <div className="space-y-8 animate-slide-up">
           
