@@ -131,10 +131,10 @@ const App: React.FC = () => {
   if (loading) {
     return (
       <div className="fixed inset-0 bg-dark flex flex-col items-center justify-center z-[9999]">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250px] h-[250px] bg-primary/20 rounded-full blur-[80px] animate-pulse-slow"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] bg-primary/20 rounded-full blur-[110px] animate-pulse-slow"></div>
         <div className="relative z-10 flex flex-col items-center">
-            <div className="w-12 h-12 border-[4px] border-primary/5 border-t-primary rounded-full animate-spin mb-6"></div>
-            <p className="text-white font-black tracking-[0.3em] text-[10px] uppercase animate-pulse">Syncing ID</p>
+            <div className="w-16 h-16 border-[4px] border-primary/5 border-t-primary rounded-full animate-spin mb-10"></div>
+            <p className="text-white font-black tracking-[0.4em] text-[10px] uppercase animate-pulse">Initializing Neural Link</p>
         </div>
       </div>
     );
@@ -149,7 +149,8 @@ const App: React.FC = () => {
   );
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-transparent text-gray-200 font-sans overflow-hidden relative">
+    <div className="flex flex-col h-[100dvh] bg-transparent text-gray-200 font-sans overflow-hidden relative selection:bg-primary/30">
+      
       {showCheckInModal && <CheckInDueModal onConfirm={handleStartCheckIn} onDismiss={() => setShowCheckInModal(false)} />}
       
       {showChat && (
@@ -158,7 +159,7 @@ const App: React.FC = () => {
           </div>
       )}
 
-      <main className="flex-1 overflow-y-auto no-scrollbar scroll-smooth pb-[110px] pt-[calc(var(--sat)+0.5rem)] relative z-10 w-full max-w-lg mx-auto px-4">
+      <main className="flex-1 overflow-y-auto no-scrollbar scroll-smooth pb-[140px] pt-[calc(var(--sat)+1rem)] relative z-10 w-full max-w-lg mx-auto md:max-w-xl lg:max-w-2xl xl:max-w-4xl px-5 scroll-glow">
         <div className="animate-fade-in">
           {currentTab === 'dashboard' && (
              <Dashboard 
@@ -193,14 +194,15 @@ const App: React.FC = () => {
       {!showChat && (
         <button 
             onClick={() => setShowChat(true)}
-            className="fixed bottom-[95px] right-5 w-12 h-12 bg-gradient-to-tr from-primary to-yellow-400 rounded-full shadow-xl flex items-center justify-center z-40 haptic-press border border-white/20"
+            className="fixed bottom-[115px] right-6 w-14 h-14 bg-gradient-to-tr from-primary to-yellow-400 rounded-full shadow-[0_15px_35px_rgba(255,215,0,0.35)] flex items-center justify-center z-40 transition-transform haptic-press duration-300 ease-spring border border-white/40 gpu"
         >
-            <i className="fas fa-robot text-dark text-xl"></i>
+            <i className="fas fa-robot text-dark text-2xl drop-shadow-sm"></i>
         </button>
       )}
 
-      <nav className="fixed bottom-6 left-5 right-5 h-[64px] z-50 flex justify-center">
-        <div className="liquid-dock w-full max-w-sm rounded-[32px] px-1 flex justify-around items-center h-full inner-glow">
+      {/* Modern Floating Dock */}
+      <nav className="fixed bottom-8 left-6 right-6 h-[72px] z-50 flex justify-center">
+        <div className="liquid-dock w-full max-w-sm rounded-[36px] px-2 flex justify-around items-center h-full inner-glow transform active:scale-[0.99] transition-transform duration-500">
           {[
             { id: 'dashboard', icon: 'fa-chart-pie', label: 'PLAN' },
             { id: 'progress', icon: 'fa-chart-line', label: 'LOG' },
@@ -210,12 +212,12 @@ const App: React.FC = () => {
             <button 
               key={tab.id}
               onClick={() => setCurrentTab(tab.id as any)} 
-              className="group flex flex-col items-center justify-center w-12 h-12 transition-all duration-300 ease-spring haptic-press"
+              className={`group flex flex-col items-center justify-center w-14 h-14 transition-all duration-500 ease-spring haptic-press`}
             >
-              <div className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-all duration-500 ease-spring ${currentTab === tab.id ? 'bg-primary text-dark shadow-md scale-105' : 'text-gray-500'}`}>
-                <i className={`fas ${tab.icon} text-base`}></i>
+              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 ease-spring ${currentTab === tab.id ? 'bg-primary text-dark shadow-[0_6px_20px_rgba(255,215,0,0.4)] scale-110' : 'text-gray-500 group-hover:bg-white/5'}`}>
+                <i className={`fas ${tab.icon} text-lg`}></i>
               </div>
-              <span className={`text-[7px] font-black tracking-widest mt-0.5 transition-all duration-300 ${currentTab === tab.id ? 'opacity-100 text-primary' : 'opacity-0'}`}>{tab.label}</span>
+              <span className={`text-[8px] font-black tracking-[0.2em] mt-1 transition-all duration-500 ${currentTab === tab.id ? 'opacity-100 translate-y-0 text-primary' : 'opacity-0 -translate-y-1'}`}>{tab.label}</span>
             </button>
           ))}
         </div>
