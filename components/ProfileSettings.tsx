@@ -90,7 +90,7 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No user found");
 
-      // 1. Calculate New Macros
+      // 1. Calculate New Macros (Fresh start, no history weighting)
       const newMacros = calculatePlan(formData);
       
       // 2. Update Profile in DB
@@ -104,7 +104,8 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
         activity_level: formData.activityLevel,
         dietary_preference: formData.dietary_preference,
         daily_calories: newMacros.calories,
-        weekly_calories: newMacros.calories * 7
+        weekly_calories: newMacros.calories * 7,
+        updated_at: new Date().toISOString()
       };
 
       const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
@@ -341,7 +342,8 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
               </div>
           </div>
 
-          <div className="pt-4 sticky bottom-6 z-20 space-y-3">
+          {/* FIXED: Removed sticky positioning to prevent floating over content */}
+          <div className="pt-8 space-y-3">
               <button 
                   onClick={handleSaveAndRegenerate}
                   disabled={loading}

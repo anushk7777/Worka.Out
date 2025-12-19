@@ -22,85 +22,50 @@ type DietType = 'veg' | 'egg' | 'non-veg';
 type TimePhase = 'morning' | 'noon' | 'evening' | 'night';
 
 // --- SUB-COMPONENTS FOR CONTEXTUAL ANIMATIONS ---
-
-// 1. Morning: Rising Sun (5 AM - 11 AM)
 const MorningComponent = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#0F172A]">
-    {/* Atmospheric Base: Cool dawn blues */}
     <div className="absolute inset-0 bg-gradient-to-b from-[#0f172a] via-[#1e3a8a] to-[#7c2d12] opacity-90"></div>
-    
-    {/* Rising Sun Glow */}
     <div className="absolute -bottom-16 -left-10 w-72 h-72 bg-gradient-to-tr from-orange-500 via-yellow-500 to-transparent rounded-full blur-[70px] animate-sunrise opacity-70"></div>
-    
-    {/* Light Rays */}
     <div className="absolute bottom-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-yellow-200/10 via-transparent to-transparent animate-pulse-slow"></div>
-
-    {/* Text Protection */}
     <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/20"></div>
   </div>
 );
 
-// 2. Noon: Bright & Vibrant (11 AM - 4 PM)
 const NoonComponent = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#0ea5e9]">
-    {/* Sky Gradient */}
     <div className="absolute inset-0 bg-gradient-to-br from-[#0284c7] via-[#38bdf8] to-[#bae6fd]"></div>
-    
-    {/* Intense Sun Overhead */}
     <div className="absolute -top-10 -right-10 w-64 h-64 bg-yellow-300 rounded-full blur-[50px] opacity-60 animate-pulse-slow"></div>
     <div className="absolute top-[-20px] right-[-20px] w-40 h-40 bg-gradient-to-br from-yellow-100 to-yellow-400 rounded-full shadow-[0_0_60px_rgba(253,224,71,0.6)]"></div>
-
-    {/* Lens Flare / Glare effect */}
     <div className="absolute top-1/2 left-1/4 w-32 h-32 bg-white/10 rounded-full blur-[40px] mix-blend-overlay"></div>
-
-    {/* Text Protection (Crucial for Noon brightness) */}
     <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/10 to-transparent"></div>
   </div>
 );
 
-// 3. Evening: Warm Sunset (4 PM - 8 PM)
 const EveningComponent = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#4c1d95]">
-    {/* Sunset Gradient: Purple -> Red -> Orange */}
     <div className="absolute inset-0 bg-gradient-to-br from-[#312e81] via-[#701a75] to-[#ea580c]"></div>
-    
-    {/* Setting Sun */}
     <div className="absolute bottom-10 -right-10 w-56 h-56 bg-gradient-to-t from-orange-600 via-red-500 to-transparent rounded-full blur-[50px] opacity-80 animate-pulse-slow"></div>
-    
-    {/* Horizon Line */}
     <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/40 to-transparent"></div>
-
-    {/* Text Protection */}
     <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/20"></div>
   </div>
 );
 
-// 4. Night: Deep Blues & Stars (8 PM - 5 AM)
 const NightComponent = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#020617]">
-    {/* Deep Space Gradient */}
     <div className="absolute inset-0 bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#1e1b4b]"></div>
-    
-    {/* Moon Orb */}
     <div className="absolute top-8 right-8 w-24 h-24 bg-gray-200 rounded-full shadow-[0_0_40px_rgba(255,255,255,0.1)] animate-moonrise opacity-90">
        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-transparent to-black/30"></div>
-       {/* Craters */}
        <div className="absolute top-4 left-3 w-4 h-4 bg-[#94a3b8] rounded-full opacity-30"></div>
        <div className="absolute top-10 left-10 w-6 h-6 bg-[#94a3b8] rounded-full opacity-20"></div>
     </div>
-    
-    {/* Twinkling Stars */}
     <div className="absolute top-10 left-10 w-0.5 h-0.5 bg-white rounded-full animate-twinkle shadow-[0_0_4px_white]"></div>
     <div className="absolute top-24 left-1/3 w-1 h-1 bg-white/70 rounded-full animate-twinkle delay-75"></div>
     <div className="absolute bottom-1/3 right-1/2 w-0.5 h-0.5 bg-white/50 rounded-full animate-twinkle delay-150"></div>
     <div className="absolute top-1/2 left-10 w-1 h-1 bg-white/80 rounded-full animate-twinkle delay-300"></div>
-    
-    {/* Text Protection */}
     <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent"></div>
   </div>
 );
 
-// Typewriter Text Component
 const TypewriterText = ({ text }: { text: string }) => {
   const [displayedText, setDisplayedText] = useState('');
   const index = useRef(0);
@@ -108,7 +73,6 @@ const TypewriterText = ({ text }: { text: string }) => {
   useEffect(() => {
     index.current = 0;
     setDisplayedText('');
-    
     const intervalId = setInterval(() => {
       if (index.current < text.length) {
         setDisplayedText((prev) => prev + text.charAt(index.current));
@@ -116,8 +80,7 @@ const TypewriterText = ({ text }: { text: string }) => {
       } else {
         clearInterval(intervalId);
       }
-    }, 40); // Typing speed
-
+    }, 40);
     return () => clearInterval(intervalId);
   }, [text]);
 
@@ -131,7 +94,6 @@ const TypewriterText = ({ text }: { text: string }) => {
   );
 };
 
-// Performance Wrapper for lazy loading and animations
 const FadeInItem: React.FC<{ children: React.ReactNode, delay?: number }> = ({ children, delay = 0 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -162,7 +124,7 @@ const FadeInItem: React.FC<{ children: React.ReactNode, delay?: number }> = ({ c
 };
 
 export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], onSignOut, onNavigate, refreshTrigger }) => {
-  // 1. Calculate Plan Source of Truth
+  // 1. Calculate Plan Source of Truth with ULTRA-ELITE ENGINE
   const plan: MacroPlan = profile.daily_calories 
     ? { ...calculatePlan(profile), calories: profile.daily_calories } 
     : calculatePlan(profile);
@@ -171,7 +133,6 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
   const [todayPlan, setTodayPlan] = useState<DailyMealPlanDB | null>(null);
   const [recentPlans, setRecentPlans] = useState<DailyMealPlanDB[]>([]);
   
-  // UI States
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showRegenModal, setShowRegenModal] = useState(false);
@@ -179,27 +140,22 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
   const [isSyncing, setIsSyncing] = useState(false);
   const [visualHaptic, setVisualHaptic] = useState<{type: 'success' | 'error', id: string} | null>(null);
   
-  // Greeting & Quote States
   const [motivationalQuote, setMotivationalQuote] = useState('');
   
-  // Pull Interaction States
   const [pullY, setPullY] = useState(0);
   const [pullUpY, setPullUpY] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartY = useRef(0);
   const [showQuickStats, setShowQuickStats] = useState(false);
 
-  // Regeneration Inputs
   const [regenPreferences, setRegenPreferences] = useState('');
   const [regenDietType, setRegenDietType] = useState<DietType>((profile.dietary_preference as DietType) || 'non-veg');
   const [regenCalories, setRegenCalories] = useState<number>(plan.calories);
 
-  // Edit Meal States
   const [editingMeal, setEditingMeal] = useState<{index: number, name: string} | null>(null);
   const [editInstruction, setEditInstruction] = useState('');
   const [isEditingMeal, setIsEditingMeal] = useState(false);
 
-  // Add Food Modal States
   const [addFoodModal, setAddFoodModal] = useState(false);
   const [addFoodInput, setAddFoodInput] = useState('');
   const [searchResults, setSearchResults] = useState<FoodItem[]>([]);
@@ -207,16 +163,11 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
   const [inputQuantity, setInputQuantity] = useState<string>(''); 
   const [prediction, setPrediction] = useState<WeightPrediction | null>(null);
 
-  // --- Effects ---
-
-  // Initialize Quote & Time
   useEffect(() => {
-    // Pick a random quote on mount
     const random = MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)];
     setMotivationalQuote(random);
   }, []);
 
-  // Sync state when profile updates
   useEffect(() => {
       setRegenDietType((profile.dietary_preference as DietType) || 'non-veg');
       setRegenCalories(profile.daily_calories || calculatePlan(profile).calories);
@@ -265,7 +216,6 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
     return `${year}-${month}-${day}`;
   };
 
-  // Determine Greeting & Time Phase
   const currentHour = new Date().getHours();
   
   let timePhase: TimePhase = 'night';
@@ -293,7 +243,7 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
   useEffect(() => { 
       if (refreshTrigger && refreshTrigger > 0) {
           setIsSyncing(true);
-          setTodayPlan(null); // Force reload
+          setTodayPlan(null);
       }
       fetchDailyPlans(); 
   }, [userId, refreshTrigger]); 
@@ -328,19 +278,14 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
 
   const toggleMealCompletion = async (index: number) => {
     if (!todayPlan || !todayPlan.meals) return;
-    
-    // Optimistic Update
     const updatedMeals = [...todayPlan.meals];
     const isNowCompleted = !updatedMeals[index].isCompleted;
     updatedMeals[index] = { ...updatedMeals[index], isCompleted: isNowCompleted };
     const updatedPlan = { ...todayPlan, meals: updatedMeals };
     setTodayPlan(updatedPlan);
-
-    // Visual Haptic
     if (isNowCompleted) {
         triggerVisualHaptic('success', `meal-${index}`);
     }
-
     try {
         await supabase.from('daily_meal_plans').update({ meals: updatedMeals }).eq('id', todayPlan.id);
         setRecentPlans(prev => [updatedPlan, ...(prev || []).filter(p => p.date !== todayPlan.date)]);
@@ -351,7 +296,6 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
     }
   };
 
-  // --- TOUCH HANDLERS FOR PULL INTERACTIONS ---
   const handleTouchStart = (e: React.TouchEvent) => {
       touchStartY.current = e.touches[0].clientY;
   };
@@ -360,13 +304,9 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
       const touchY = e.touches[0].clientY;
       const diff = touchY - touchStartY.current;
       const scrollTop = window.scrollY || document.documentElement.scrollTop;
-      
-      // Pull to Refresh (Only when at top)
       if (scrollTop <= 0 && diff > 0) {
-          setPullY(Math.min(diff * 0.4, 120)); // Damping
+          setPullY(Math.min(diff * 0.4, 120));
       }
-
-      // Pull Up for Stats (Only when at bottom)
       const scrollHeight = document.documentElement.scrollHeight;
       const clientHeight = document.documentElement.clientHeight;
       if (scrollTop + clientHeight >= scrollHeight - 20 && diff < 0) {
@@ -376,56 +316,44 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
 
   const handleTouchEnd = () => {
       if (pullY > 80) {
-          // Trigger Refresh
           setIsSyncing(true);
           fetchDailyPlans();
       }
       if (pullUpY > 100) {
-          // Trigger Quick Stats
           setShowQuickStats(true);
       }
       setPullY(0);
       setPullUpY(0);
   };
 
-  // --- REGENERATION LOGIC ---
   const handleGenerateToday = async () => {
     setGenerating(true);
     setShowRegenModal(false);
-    
     try {
         const today = getTodayDate();
         const historyForAI = (recentPlans || []).filter(p => p.date !== today);
-        
-        // Use the manual overrides from modal
         const effectiveMacros = { ...plan, calories: regenCalories };
-        
         const newPlan = await generateDailyMealPlan(
             profile, 
             effectiveMacros, 
             today, 
             historyForAI, 
-            regenPreferences, // Custom user instructions
-            regenDietType,    // Override diet type
-            regenCalories     // Override calories
+            regenPreferences, 
+            regenDietType,    
+            regenCalories     
         );
-        
         if (!newPlan || !newPlan.meals || !Array.isArray(newPlan.meals)) throw new Error("Invalid plan generated");
-        
         const { error: upsertError } = await supabase.from('daily_meal_plans').upsert({ 
             user_id: userId, 
             date: today, 
             meals: newPlan.meals, 
             macros: newPlan.macros 
         }, { onConflict: 'user_id, date' });
-        
         if (upsertError) throw upsertError;
-        
         setTodayPlan(newPlan);
         setRecentPlans(prev => [newPlan, ...(prev || []).filter(p => p.date !== today)]);
-        setRegenPreferences(''); // Clear input
+        setRegenPreferences('');
         triggerVisualHaptic('success', 'regen-btn');
-        
     } catch (err: any) { 
         triggerVisualHaptic('error', 'regen-btn');
         alert(`Failed: ${getErrorMessage(err)}`); 
@@ -434,32 +362,23 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
     }
   };
 
-  // --- SINGLE MEAL EDIT LOGIC ---
   const handleSubmitEdit = async () => {
     if (!editingMeal || !todayPlan || !editInstruction.trim()) return;
-    
     setIsEditingMeal(true);
     try {
-        // Calculate new effective plan target (keep current macro goals)
         const updatedPlan = await handleDietDeviation(todayPlan, plan, editingMeal.index, editInstruction);
-        
         if (!updatedPlan || !updatedPlan.meals) throw new Error("Failed to edit meal");
-        
         await supabase.from('daily_meal_plans').upsert({ 
              user_id: userId, 
              date: todayPlan.date, 
              meals: updatedPlan.meals, 
              macros: updatedPlan.macros 
         }, { onConflict: 'user_id, date' });
-
         setTodayPlan(updatedPlan);
         setRecentPlans(prev => [updatedPlan, ...(prev || []).filter(p => p.date !== todayPlan.date)]);
-        
-        // Close Modal
         setEditingMeal(null);
         setEditInstruction('');
         triggerVisualHaptic('success', `meal-${editingMeal.index}`);
-
     } catch (e: any) {
         triggerVisualHaptic('error', 'edit-modal');
         alert("Failed to edit meal: " + getErrorMessage(e));
@@ -519,7 +438,6 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
         onTouchMove={handleTouchMove} 
         onTouchEnd={handleTouchEnd}
     >
-      {/* Pull to Refresh Visual Indicator */}
       <div 
         className="fixed top-0 left-0 right-0 flex justify-center z-50 pointer-events-none transition-transform duration-75 ease-out"
         style={{ transform: `translateY(${pullY - 60}px)`, opacity: pullY > 10 ? 1 : 0 }}
@@ -529,7 +447,6 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
         </div>
       </div>
 
-      {/* Quick Stats Bottom Sheet (Triggered by Pull Up) */}
       <div className={`fixed bottom-0 left-0 right-0 bg-secondary border-t border-white/10 rounded-t-[40px] z-[60] transition-all duration-500 p-8 shadow-2xl ${showQuickStats ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
          <div className="flex justify-between items-center mb-6">
             <h3 className="text-xl font-black text-white">Daily Summary</h3>
@@ -545,11 +462,23 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                 <p className={`text-2xl font-black ${consumed.cal > totalCalTarget ? 'text-red-400' : 'text-green-400'}`}>{consumed.cal} <span className="text-sm text-gray-600">kcal</span></p>
             </div>
          </div>
+         {/* ULTRA-ELITE METRICS DISPLAY IN QUICK STATS */}
+         <div className="mt-4 bg-primary/10 p-4 rounded-2xl border border-primary/20">
+             <div className="flex justify-between items-center">
+                 <span className="text-[10px] text-primary font-black uppercase tracking-widest">Engine Confidence</span>
+                 <span className="text-white font-bold">{plan.confidenceScore}%</span>
+             </div>
+             <div className="h-1 bg-white/10 rounded-full mt-2 overflow-hidden">
+                 <div className="h-full bg-primary transition-all duration-1000" style={{width: `${plan.confidenceScore}%`}}></div>
+             </div>
+             <p className="text-[10px] text-gray-400 mt-2">
+                 True BMR: <span className="text-white">{plan.trueBmr}</span> ± {plan.uncertaintyBand} kcal
+             </p>
+         </div>
       </div>
 
       {showScanner && <BarcodeScanner onScanSuccess={handleScanSuccess} onClose={() => setShowScanner(false)} />}
       
-      {/* Regeneration Modal */}
       {showRegenModal && (
         <div className="fixed inset-0 bg-dark/95 backdrop-blur-3xl z-[80] flex items-center justify-center p-6 animate-fade-in">
              <div id="regen-modal" className={`glass-card w-full max-w-sm rounded-[40px] p-8 border-primary/20 relative z-10 animate-scale-in ${visualHaptic?.id === 'regen-btn' && visualHaptic.type === 'error' ? 'animate-shake' : ''}`}>
@@ -559,7 +488,6 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                  </div>
 
                  <div className="space-y-6">
-                    {/* Diet Type Selector */}
                     <div>
                         <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Day's Preference</label>
                         <div className="flex bg-black/40 p-1 rounded-xl border border-white/5">
@@ -575,7 +503,6 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                         </div>
                     </div>
 
-                    {/* Calorie Override */}
                     <div>
                          <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Calorie Target</label>
                          <input 
@@ -586,7 +513,6 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                          />
                     </div>
 
-                    {/* Instructions */}
                     <div>
                          <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Custom Instructions</label>
                          <textarea 
@@ -610,7 +536,6 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
         </div>
       )}
 
-      {/* Edit Meal Modal */}
       {editingMeal && (
           <div className="fixed inset-0 bg-dark/95 backdrop-blur-3xl z-[90] flex items-center justify-center p-6 animate-fade-in">
               <div id="edit-modal" className={`glass-card w-full max-w-sm rounded-[40px] p-8 border-white/10 relative z-10 animate-scale-in shadow-2xl ${visualHaptic?.id === 'edit-modal' && visualHaptic.type === 'error' ? 'animate-shake' : ''}`}>
@@ -654,15 +579,11 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
           </div>
       )}
 
-      {/* --- NEW HEADER IMPLEMENTATION WITH CONTEXTUAL ANIMATIONS --- */}
       <header className="relative mb-8 p-6 overflow-hidden rounded-[32px] glass-card border border-white/10 group">
-        {/* Ambient Background Layer */}
         {timePhase === 'morning' && <MorningComponent />}
         {timePhase === 'noon' && <NoonComponent />}
         {timePhase === 'evening' && <EveningComponent />}
         {timePhase === 'night' && <NightComponent />}
-
-        {/* Content Layer */}
         <div className="relative z-10">
             <div className="flex justify-between items-start">
                 <div>
@@ -676,16 +597,12 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                     <i className="fas fa-fingerprint text-white text-2xl drop-shadow-md"></i>
                 </button>
             </div>
-            
-            {/* Typewriter Quote */}
             <TypewriterText text={motivationalQuote} />
         </div>
       </header>
 
-      {/* High-Fidelity Liquid Status Panel */}
       <section className="relative overflow-hidden rounded-[42px] p-8 animate-scale-in glass-card inner-glow gpu border-white/15">
          <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/10 rounded-full blur-[120px] pointer-events-none -mr-40 -mt-40 animate-pulse-slow"></div>
-         
          <div className="relative z-10">
             <div className="mb-10">
                 <div className="flex flex-wrap items-baseline gap-2 sm:gap-3">
@@ -697,8 +614,27 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                       <span className="text-primary text-[10px] font-black uppercase tracking-[0.2em] mt-1 sm:mt-2 bg-primary/5 px-2 py-0.5 rounded-md border border-primary/10 w-fit">Metabolic Unit</span>
                     </div>
                 </div>
-                {/* Liquid Tube Tracker */}
-                <div className="w-full bg-black/50 h-6 rounded-full mt-8 overflow-hidden border border-white/10 p-[3px] shadow-inner">
+                
+                {/* --- ADAPTIVE CORRECTION INDICATOR --- */}
+                <div className="mt-4 flex flex-col gap-2">
+                   <div className="flex items-center gap-2 opacity-70">
+                      <div className={`w-2 h-2 rounded-full ${plan.confidenceScore > 80 ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                      <span className="text-[9px] text-gray-400 font-mono tracking-wider">
+                        EST. TRUE BMR: {plan.trueBmr} ± {plan.uncertaintyBand} (Conf: {plan.confidenceScore}%)
+                      </span>
+                   </div>
+                   {/* SHOW ZIG ZAG REASON IF ACTIVE */}
+                   {plan.adaptationReason && (
+                       <div className="bg-red-500/10 border border-red-500/30 p-2 rounded-lg flex items-start gap-2 max-w-sm animate-pulse-slow">
+                           <i className="fas fa-exclamation-circle text-red-400 text-xs mt-0.5"></i>
+                           <p className="text-[10px] text-red-300 font-bold uppercase tracking-wide leading-tight">
+                               {plan.adaptationReason}
+                           </p>
+                       </div>
+                   )}
+                </div>
+
+                <div className="w-full bg-black/50 h-6 rounded-full mt-6 overflow-hidden border border-white/10 p-[3px] shadow-inner">
                     <div className={`h-full rounded-full transition-all duration-1000 ease-liquid gpu relative ${consumed.cal > totalCalTarget ? 'bg-gradient-to-r from-red-600 to-red-400' : 'bg-gradient-to-r from-primary via-yellow-400 to-yellow-300 shadow-[0_0_20px_rgba(255,215,0,0.3)]'}`} style={{ width: `${calPct}%` }}>
                         <div className="absolute inset-0 bg-white/20 blur-[2px] h-[40%] rounded-full translate-y-[-1px]"></div>
                     </div>
@@ -725,7 +661,6 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
         </div>
       </section>
 
-      {/* Magnetic Tab Switcher */}
       <div className="bg-black/60 p-2 rounded-[32px] border border-white/10 flex relative backdrop-blur-[40px] sticky top-4 z-20 shadow-2xl inner-glow animate-fade-in mx-2">
         {['diet', 'workout', 'overview'].map((tab) => (
             <button 
@@ -763,7 +698,6 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                     </FadeInItem>
                 ) : (
                     <div className={`space-y-5 ${generating ? 'opacity-40 pointer-events-none grayscale' : ''}`}>
-                         {/* PROMINENT REGENERATION COMMAND CENTER */}
                          <div className="flex justify-between items-center px-2">
                              <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
@@ -796,7 +730,6 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                                         </div>
                                         
                                         <div className="flex items-center gap-3">
-                                            {/* EDIT BUTTON */}
                                             {!meal.isCompleted && (
                                                 <button 
                                                     onClick={(e) => { e.stopPropagation(); setEditingMeal({index: idx, name: meal.name}); setEditInstruction(''); }}

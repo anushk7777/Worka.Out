@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ProgressEntry, UserProfile } from '../types';
 import { supabase } from '../services/supabaseClient';
@@ -95,7 +96,7 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
       // 2. Insert Log
       const logData = {
         user_id: user.id,
-        date: getTodayISO(), // FIXED: Uses YYYY-MM-DD
+        date: getTodayISO(), 
         weight: Number(weight),
         body_fat: bodyFat ? Number(bodyFat) : null,
         photo_url: photoUrl,
@@ -123,7 +124,10 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
 
       // --- AUTO-SCALE LOGIC ---
       const weightDiff = Math.abs(weight - profile.weight);
-      if (weightDiff >= 0.5) {
+      // We regenerate if diff > 0.5kg OR if adaptive correction might be needed (Fat Loss + Gain)
+      const needsCorrection = (profile.goal === 'Fat Loss' && weight > profile.weight + 0.3);
+      
+      if (weightDiff >= 0.5 || needsCorrection) {
         await regeneratePlan(user.id, weight);
       } else {
         alert('Progress logged successfully!');
@@ -155,16 +159,26 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
         
         if (!profileData) return;
 
-        // Recalculate Calories for Database
+        // Recalculate Calories with Adaptive Correction
+        const oldWeight = profileData.weight;
         const updatedProfileRaw: UserProfile = { ...profileData, weight: newWeight };
-        const newMacros = calculatePlan(updatedProfileRaw);
+        
+        // CALCULATE DAYS SINCE LAST UPDATE FOR NORMALIZATION
+        const lastUpdateDate = profileData.updated_at ? new Date(profileData.updated_at) : new Date();
+        const now = new Date();
+        const diffTime = Math.abs(now.getTime() - lastUpdateDate.getTime());
+        const daysSinceLastLog = Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24)));
+
+        // PASS OLD WEIGHT AND DAYS TO TRIGGER TIME-NORMALIZED ZIG ZAG
+        const newMacros = calculatePlan(updatedProfileRaw, oldWeight, daysSinceLastLog);
 
         await supabase
           .from('profiles')
           .update({ 
               weight: newWeight,
               daily_calories: newMacros.calories,
-              weekly_calories: newMacros.calories * 7
+              weekly_calories: newMacros.calories * 7,
+              updated_at: new Date().toISOString() // Update timestamp for next calc
           })
           .eq('id', userId);
 
@@ -183,7 +197,11 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
             workout_plan: newWorkout
         });
 
-        alert('Progress logged! Your daily & weekly calorie budgets have been updated based on new weight.');
+        const alertMsg = newMacros.adaptationReason 
+            ? `Update: ${newMacros.adaptationReason} New Target: ${newMacros.calories} kcal.`
+            : `Progress logged! Profile updated to ${newWeight}kg. New Target: ${newMacros.calories} kcal.`;
+            
+        alert(alertMsg);
     } catch (err) {
         console.error("Scaling failed:", err);
         alert('Progress logged, but failed to update plan.');
@@ -394,7 +412,7 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
                     {loading || regenerating ? (
                         <>
                             <i className="fas fa-spinner fa-spin"></i> 
-                            {regenerating ? "Updating Profile..." : "Saving Log..."}
+                            {regenerating ? "Zig-Zag Adapting..." : "Saving Log..."}
                         </>
                     ) : (
                         <><i className="fas fa-save"></i> Save Entry</>

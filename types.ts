@@ -29,6 +29,7 @@ export interface UserProfile {
   bodyFat?: number; // Optional percentage
   daily_calories?: number; // Backend stored target
   weekly_calories?: number; // Backend stored budget
+  updated_at?: string; // ISO Timestamp for Zig-Zag normalization
 }
 
 export interface ProgressEntry {
@@ -49,6 +50,13 @@ export interface MacroPlan {
   bmr: number;
   maintenance: number;
   calculationMethod: string;
+  // Ultra-Elite Engine Outputs
+  trueBmr: number;
+  uncertaintyBand: number; // ± kcal
+  confidenceScore: number; // 0-100
+  phenotype: string;
+  dominantModels: string[];
+  adaptationReason?: string; // New field for adaptive feedback
 }
 
 export interface WeightPrediction {
