@@ -14,8 +14,13 @@ const BarcodeScanner: React.FC<Props> = ({ onScanSuccess, onClose }) => {
   useEffect(() => {
     const startScanner = async () => {
       try {
-        // @ts-ignore - html5-qrcode loaded via script tag
-        const html5QrcodeScanner = new window.Html5QrcodeScanner(
+        // Use type assertion to avoid TypeScript error on window property for externally loaded script
+        if (typeof (window as any).Html5QrcodeScanner === 'undefined') {
+          throw new Error("Scanner engine not loaded.");
+        }
+        
+        // Use type assertion to instantiate the global scanner class
+        const html5QrcodeScanner = new (window as any).Html5QrcodeScanner(
           "reader",
           { fps: 10, qrbox: { width: 250, height: 250 } },
           /* verbose= */ false
@@ -38,26 +43,29 @@ const BarcodeScanner: React.FC<Props> = ({ onScanSuccess, onClose }) => {
 
   const fetchProductData = async (barcode: string) => {
     try {
-      // Use OpenFoodFacts API (Free, excellent for Indian products)
-      const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+      // Use OpenFoodFacts API
+      const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`, {
+        signal: AbortSignal.timeout(10000) // 10s timeout
+      });
+      
+      if (!response.ok) throw new Error("Database unreachable.");
+      
       const data = await response.json();
 
       if (data.status === 1) {
         const p = data.product;
         
-        // Determine type loosely based on serving size string or category
         const servingSizeStr = p.serving_size || "";
         let type: 'solid' | 'liquid' | 'unit' = 'solid';
         let baseAmount = 100;
 
         if (servingSizeStr.toLowerCase().includes('ml')) type = 'liquid';
         
-        // Normalize Data to standard 100g/ml if available in nutriments
         const foodItem: FoodItem = {
           id: `scan-${barcode}`,
           name: p.product_name || "Unknown Product",
           type: type,
-          base_amount: baseAmount, // OpenFoodFacts nutriments are per 100g usually
+          base_amount: baseAmount,
           calories: Math.round(p.nutriments?.['energy-kcal_100g'] || 0),
           protein: Math.round(p.nutriments?.proteins_100g || 0),
           carbs: Math.round(p.nutriments?.carbohydrates_100g || 0),
@@ -67,10 +75,11 @@ const BarcodeScanner: React.FC<Props> = ({ onScanSuccess, onClose }) => {
         onScanSuccess(foodItem);
       } else {
         setError("Product not found in database.");
-        setTimeout(onClose, 2000);
+        setTimeout(onClose, 2500);
       }
-    } catch (err) {
-      setError("Network error fetching product.");
+    } catch (err: any) {
+      setError(err.name === 'TimeoutError' ? "Request timed out." : "Network error fetching data.");
+      setTimeout(onClose, 2500);
     }
   };
 
@@ -95,16 +104,16 @@ const BarcodeScanner: React.FC<Props> = ({ onScanSuccess, onClose }) => {
             )}
 
             {error && (
-                <div className="text-center py-8 text-red-400">
+                <div className="text-center py-8 text-red-400 animate-shake">
                     <i className="fas fa-exclamation-circle text-3xl mb-2"></i>
-                    <p>{error}</p>
+                    <p className="font-bold">{error}</p>
                 </div>
             )}
         </div>
         
         <div className="p-4 bg-white/5 text-center">
-            <p className="text-[10px] text-gray-500">
-                Point camera at barcode. Works with most Indian packaged foods (Biscuits, Chips, Protein Bars).
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest">
+                Center the barcode in the frame
             </p>
         </div>
       </div>

@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -279,8 +278,14 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
+          // Changed to relative path to handle preview environments with different root origins
+          navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
             .then((registration) => {
+              // Check for updates periodically
+              setInterval(() => {
+                registration.update();
+              }, 60 * 60 * 1000); // Check every hour
+              
               console.log('SW registered: ', registration);
             })
             .catch((registrationError) => {

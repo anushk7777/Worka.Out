@@ -352,8 +352,9 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
   };
 
   const handleGenerateToday = async () => {
+    console.log("Generating today's plan...");
     setGenerating(true);
-    setShowRegenModal(false);
+    // Do not close modal immediately so user sees loading state
     try {
         const today = getTodayDate();
         const historyForAI = (recentPlans || []).filter(p => p.date !== today);
@@ -368,18 +369,23 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
             regenCalories     
         );
         if (!newPlan || !newPlan.meals || !Array.isArray(newPlan.meals)) throw new Error("Invalid plan generated");
+        
         const { error: upsertError } = await supabase.from('daily_meal_plans').upsert({ 
             user_id: userId, 
             date: today, 
             meals: newPlan.meals, 
             macros: newPlan.macros 
         }, { onConflict: 'user_id, date' });
+        
         if (upsertError) throw upsertError;
+        
         setTodayPlan(newPlan);
         setRecentPlans(prev => [newPlan, ...(prev || []).filter(p => p.date !== today)]);
         setRegenPreferences('');
         triggerVisualHaptic('success', 'regen-btn');
+        setShowRegenModal(false); // Close after success
     } catch (err: any) { 
+        console.error("Generation failed:", err);
         triggerVisualHaptic('error', 'regen-btn');
         alert(`Failed: ${getErrorMessage(err)}`); 
     } finally { 
@@ -551,10 +557,10 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                     <button 
                          onClick={handleGenerateToday}
                          disabled={generating}
-                         className={`w-full bg-white text-dark font-black py-5 rounded-2xl text-[11px] uppercase tracking-[0.3em] shadow-xl haptic-press active:scale-95 transition-transform flex items-center justify-center gap-3 ${visualHaptic?.id === 'regen-btn' && visualHaptic.type === 'success' ? 'animate-pulse-double ring-4 ring-green-500/50' : ''}`}
+                         className={`w-full bg-white text-dark font-black py-5 rounded-2xl text-[11px] uppercase tracking-[0.3em] shadow-xl haptic-press active:scale-95 transition-transform flex items-center justify-center gap-3 ${visualHaptic?.id === 'regen-btn' && visualHaptic.type === 'success' ? 'animate-pulse-double ring-4 ring-green-500/50' : ''} ${generating ? 'opacity-70 cursor-wait' : ''}`}
                     >
                         {generating ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-bolt"></i>}
-                        Generate New Plan
+                        {generating ? "Computing..." : "Generate New Plan"}
                     </button>
                  </div>
              </div>
@@ -701,7 +707,6 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
       <div className="min-h-[450px] relative z-10 pb-12 px-1">
         {activeTab === 'diet' && (
             <div className="space-y-6 animate-slide-up">
-                {/* ... existing diet UI ... */}
                 {/* --- GOAL MISMATCH ALERT --- */}
                 {isPlanMismatch && (
                     <FadeInItem>
@@ -740,7 +745,10 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                                 Neural processing of today's intake data required. Initialize optimization protocol.
                             </p>
                             <button 
-                                onClick={() => setShowRegenModal(true)} 
+                                onClick={() => {
+                                    console.log("Opening regen modal");
+                                    setShowRegenModal(true);
+                                }} 
                                 disabled={generating} 
                                 className="bg-white text-dark font-black py-6 px-16 rounded-[28px] shadow-[0_25px_50px_-12px_rgba(255,255,255,0.2)] flex items-center justify-center gap-4 haptic-press transition-all hover:translate-y-[-2px] mx-auto tracking-[0.2em] uppercase text-[11px]"
                             >

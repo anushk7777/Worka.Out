@@ -212,6 +212,16 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
             </div>
          </div>
       </div>
+      
+      {/* PWA Install Button */}
+      {deferredPrompt && (
+        <button
+          onClick={handleInstallClick}
+          className="w-full bg-gradient-to-r from-primary/20 to-primary/10 border border-primary/50 text-primary font-black py-4 rounded-2xl flex items-center justify-center gap-3 uppercase tracking-widest text-xs animate-pulse-slow shadow-[0_0_20px_rgba(255,215,0,0.1)] haptic-press"
+        >
+          <i className="fas fa-download"></i> Install App to Home Screen
+        </button>
+      )}
 
       <div className="space-y-8 animate-slide-up">
           

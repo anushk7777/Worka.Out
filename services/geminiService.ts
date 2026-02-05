@@ -3,16 +3,16 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { ChatMessage, UserProfile, ProgressEntry, MacroPlan, DailyMealPlanDB, WorkoutDay, SupplementRecommendation } from "../types";
 import { SYSTEM_PROMPT, FOOD_DATABASE } from "../constants";
 
-// Initialize AI directly as per guidelines
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Helper to get a fresh client instance
+const getAIClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const retryWithBackoff = async <T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> => {
     for (let i = 0; i < maxRetries; i++) {
         try {
             return await fn();
         } catch (error) {
+            console.warn(`Retry attempt ${i + 1} failed:`, error);
             if (i === maxRetries - 1) throw error;
-            console.warn(`Retry attempt ${i + 1} failed. Retrying...`);
             await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i))); // Exponential backoff
         }
     }
@@ -31,18 +31,33 @@ const getFoodDBContext = () => {
 
 const cleanJson = (text: string): string => {
     if (!text) return "{}";
-    let cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    const firstBrace = cleaned.indexOf('{');
-    const lastBrace = cleaned.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1) {
-        return cleaned.substring(firstBrace, lastBrace + 1);
+    try {
+        let cleaned = text.trim();
+        // Remove markdown formatting
+        cleaned = cleaned.replace(/^```json/gm, '').replace(/^```/gm, '').trim();
+        
+        // Find the first '{' or '['
+        const firstBrace = cleaned.indexOf('{');
+        const firstBracket = cleaned.indexOf('[');
+        
+        if (firstBrace === -1 && firstBracket === -1) return "{}";
+        
+        let startIdx = 0;
+        let endIdx = cleaned.length;
+        
+        if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+            startIdx = firstBrace;
+            endIdx = cleaned.lastIndexOf('}') + 1;
+        } else if (firstBracket !== -1) {
+            startIdx = firstBracket;
+            endIdx = cleaned.lastIndexOf(']') + 1;
+        }
+        
+        return cleaned.substring(startIdx, endIdx);
+    } catch (e) {
+        console.error("JSON Clean Error:", e);
+        return "{}";
     }
-    const firstBracket = cleaned.indexOf('[');
-    const lastBracket = cleaned.lastIndexOf(']');
-    if (firstBracket !== -1 && lastBracket !== -1) {
-        return cleaned.substring(firstBracket, lastBracket + 1);
-    }
-    return cleaned;
 };
 
 export const generateTrainerResponse = async (
@@ -52,7 +67,7 @@ export const generateTrainerResponse = async (
   newMessage: string
 ): Promise<{ text: string, sources?: { title: string, uri: string }[] }> => {
   try {
-    const model = 'gemini-3-pro-preview';
+    const ai = getAIClient();
     let contextPrompt = SYSTEM_PROMPT;
     if (userProfile) {
       contextPrompt += `\n\n=== CLIENT PROFILE ===\nName: ${userProfile.name}\nAge: ${userProfile.age}\nGoal: ${userProfile.goal}\nActivity: ${userProfile.activityLevel}\nCurrent Weight: ${userProfile.weight}kg\nConditions: ${userProfile.medical_conditions || 'None'}\nIntensity: ${userProfile.goal_aggressiveness || 'normal'}`;
@@ -65,12 +80,12 @@ export const generateTrainerResponse = async (
     ];
 
     const response = await ai.models.generateContent({
-      model: model,
+      model: 'gemini-3-pro-preview',
       contents: contents,
       config: { 
         tools: [{ googleSearch: {} }], 
         temperature: 0.7,
-        thinkingConfig: { thinkingBudget: 16000 }
+        thinkingConfig: { thinkingBudget: 8000 } // Reduced for speed/stability
       }
     });
 
@@ -98,47 +113,37 @@ export const analyzeBodyComposition = async (
     Subject Data: Gender: ${profile.gender}, Age: ${profile.age}, Height: ${profile.height} cm, Weight: ${profile.weight} kg.
 
     PROTOCOL (STRICT):
-    1. **Validation Check**: 
-       - If the image is NOT a human torso/body (e.g. text, objects, blurry, face-only), REJECT immediately with valid: false.
-       - If clothing obscures critical landmarks (abs, waist), REJECT.
-
-    2. **Anatomical Segmentation (Deep Scan)**:
-       - Analyze Abdominal Definition: Check for linea alba, serratus anterior visibility, and lower ab vascularity.
-       - Analyze Muscular Separation: Check deltoid/bicep separation and quadricep tear-drop visibility.
-       - Analyze Adipose Storage: Evaluate love handles (suprailiac) and lower back storage.
-
-    3. **Estimation Logic**:
-       - Compare visual features against the Jackson-Pollock 3-site visual proxies.
-       - Reference "Navy Tape Method" visual proxies (neck-to-waist ratio).
-       - Cross-reference with standard athletic body composition charts for ${profile.gender}.
-
-    4. **Output**:
-       - Provide a single integer percentage.
-       - Provide a concise, clinical reasoning string (max 25 words) citing specific visual markers observed.
-
-    Example Reasoning: "Clear upper abs visible, serratus anterior faint. Slight suprailiac storage. Consistent with 14-16% range."
+    1. Validation Check: REJECT valid:false if not a human torso or completely blurry.
+    2. Analyze visual landmarks (abs, obliques, separation).
+    3. Output JSON.
   `;
 
   try {
+    const ai = getAIClient();
     const parts: any[] = [{ text: prompt }];
+    
+    // Safety check for base64
     const processImage = (base64: string) => {
+        if (!base64 || typeof base64 !== 'string') return null;
         const matches = base64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
         return (matches && matches.length === 3) ? { mimeType: matches[1], data: matches[2] } : { mimeType: "image/jpeg", data: base64 };
     };
 
     const frontImg = processImage(frontImageBase64);
+    if (!frontImg) throw new Error("Invalid image data");
+    
     parts.push({ inlineData: { mimeType: frontImg.mimeType, data: frontImg.data } });
 
     if (backImageBase64) {
         const backImg = processImage(backImageBase64);
-        parts.push({ inlineData: { mimeType: backImg.mimeType, data: backImg.data } });
+        if (backImg) parts.push({ inlineData: { mimeType: backImg.mimeType, data: backImg.data } });
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview", // UPGRADED MODEL FOR HIGHER ACCURACY
+      model: "gemini-3-pro-preview", 
       contents: { parts: parts },
       config: { 
-        thinkingConfig: { thinkingBudget: 16000 }, // ENABLE DEEP THINKING
+        thinkingConfig: { thinkingBudget: 8000 },
         responseMimeType: "application/json",
         responseSchema: { 
           type: Type.OBJECT, 
@@ -154,18 +159,19 @@ export const analyzeBodyComposition = async (
     return JSON.parse(cleanJson(response.text));
   } catch (error) { 
     console.error("Analysis Error:", error);
-    throw new Error("Vision analysis failed. Check image format."); 
+    return { valid: false, reasoning: "Vision analysis service unavailable." };
   }
 };
 
 export const generateWorkoutSplit = async (profile: UserProfile): Promise<WorkoutDay[]> => {
     const prompt = `Create a 7-day Weekly Workout Split for Goal: ${profile.goal}, Activity: ${profile.activityLevel}. Format as JSON.`;
     try {
+        const ai = getAIClient();
         const response = await ai.models.generateContent({
             model: "gemini-3-pro-preview",
             contents: prompt,
             config: { 
-                thinkingConfig: { thinkingBudget: 16000 },
+                thinkingConfig: { thinkingBudget: 8000 },
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
@@ -201,7 +207,10 @@ export const generateWorkoutSplit = async (profile: UserProfile): Promise<Workou
         });
         const data = JSON.parse(cleanJson(response.text));
         return data?.workout || [];
-    } catch (e) { return []; }
+    } catch (e) { 
+        console.error("Workout Gen Error:", e);
+        return []; 
+    }
 };
 
 export const generateDailyMealPlan = async (
@@ -217,7 +226,16 @@ export const generateDailyMealPlan = async (
     const foodDB = getFoodDBContext();
     const effectiveCalories = customCalorieTarget || macros.calories;
     const aggressiveness = profile.goal_aggressiveness === 'aggressive' ? "AGGRESSIVE/ACCELERATED (Strict Compliance Required)" : "SUSTAINABLE (Balanced)";
-    const medical = profile.medical_conditions ? `MEDICAL CONDITIONS: ${profile.medical_conditions}. AVOID CONTRAINDICATED FOODS.` : "No medical conditions.";
+    
+    // MEDICAL CONTEXT ENHANCEMENT
+    const medical = profile.medical_conditions 
+        ? `MEDICAL PROTOCOL ACTIVE: "${profile.medical_conditions}".
+           ADAPTATION RULES:
+           1. DIABETES/INSULIN: Use Complex Carbs (Low GI), High Fiber. NO simple sugars.
+           2. DEPRESSION/MOOD: Include Serotonergic foods (Walnuts, Seeds, Oats, Eggs, Dark Chocolate).
+           3. HYPERTENSION: Restrict Sodium.
+           4. GENERAL: Strictly avoid foods contraindicated for the listed conditions.`
+        : "No medical conditions.";
     
     const prompt = `
       Create a meal plan for ${dateStr} at ${effectiveCalories} kcal.
@@ -233,11 +251,14 @@ export const generateDailyMealPlan = async (
 
     return retryWithBackoff(async () => {
         try {
+            const ai = getAIClient();
+            console.log("Generating plan for:", dateStr);
             const response = await ai.models.generateContent({
                 model: "gemini-3-pro-preview", 
                 contents: prompt,
                 config: { 
-                    thinkingConfig: { thinkingBudget: 16000 }, 
+                    maxOutputTokens: 32768, // Explicitly set max output tokens to allow room after thinking
+                    thinkingConfig: { thinkingBudget: 12000 }, 
                     responseMimeType: "application/json",
                     responseSchema: {
                       type: Type.OBJECT,
@@ -281,9 +302,10 @@ export const generateDailyMealPlan = async (
                 } 
             });
 
+            console.log("Plan generated, cleaning JSON...");
             const data = JSON.parse(cleanJson(response.text));
             if (!data?.meals || !Array.isArray(data.meals)) {
-                throw new Error("Invalid response format");
+                throw new Error("Invalid response format: Missing meals array");
             }
             return { date: dateStr, meals: data.meals, macros: data.daily_totals || { p: 0, c: 0, f: 0, cal: 0 } };
         } catch (e: any) {
@@ -296,11 +318,12 @@ export const generateDailyMealPlan = async (
 export const handleDietDeviation = async (currentPlan: DailyMealPlanDB, targetMacros: MacroPlan, mealIndex: number, userDescription: string): Promise<DailyMealPlanDB> => {
     const prompt = `Adjust plan for deviation. Meal: ${currentPlan.meals[mealIndex].name}. User ate: "${userDescription}". Re-balance remaining meals to hit target: ${targetMacros.calories}kcal.`;
     try {
+        const ai = getAIClient();
         const response = await ai.models.generateContent({
             model: "gemini-3-pro-preview", 
             contents: prompt,
             config: { 
-                thinkingConfig: { thinkingBudget: 8000 }, 
+                thinkingConfig: { thinkingBudget: 4000 }, 
                 responseMimeType: "application/json"
             } 
         });
@@ -312,6 +335,7 @@ export const handleDietDeviation = async (currentPlan: DailyMealPlanDB, targetMa
 export const addFoodItem = async (currentPlan: DailyMealPlanDB, userDescription: string): Promise<DailyMealPlanDB> => {
     const prompt = `Add item "${userDescription}" to plan. Estimate macros accurately. Return full updated plan JSON.`;
     try {
+        const ai = getAIClient();
         const response = await ai.models.generateContent({
             model: "gemini-3-pro-preview", 
             contents: prompt,
@@ -333,17 +357,20 @@ export const generateSupplementStack = async (profile: UserProfile): Promise<Sup
       Medical Context: ${profile.medical_conditions || 'None'}
       Activity Level: ${profile.activityLevel}
       
+      INSTRUCTION: If medical conditions are present (e.g., Diabetes, Depression), prioritize supplements known to support those specific conditions (e.g., Magnesium/Ashwagandha for mood, Chromium for blood sugar) provided they are generally safe. List contraindications clearly.
+
       CRITICAL: Keep descriptions extremely concise (max 100 characters). 
       Do NOT include long paragraphs. 
       Focus only on evidence-based data for this specific user profile.
     `;
     
     try {
+        const ai = getAIClient();
         const response = await ai.models.generateContent({
             model: "gemini-3-pro-preview",
             contents: prompt,
             config: { 
-                thinkingConfig: { thinkingBudget: 16000 },
+                thinkingConfig: { thinkingBudget: 8000 },
                 responseMimeType: "application/json",
                 responseSchema: {
                   type: Type.OBJECT,

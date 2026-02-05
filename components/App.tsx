@@ -55,8 +55,9 @@ const App: React.FC = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) fetchUserData(session.user.id);
-      else {
+      if (session) {
+        fetchUserData(session.user.id);
+      } else {
         setProfile(null);
         setWorkoutPlan(null);
         setLoading(false);
@@ -109,18 +110,6 @@ const App: React.FC = () => {
           photo_url: log.photo_url
         }));
         setProgressLogs(formattedLogs);
-
-        if (formattedLogs.length > 0) {
-          const lastLog = formattedLogs[formattedLogs.length - 1];
-          const lastLogDateStr = lastLog.created_at || lastLog.date;
-          const lastLogDate = new Date(lastLogDateStr);
-          if (!isNaN(lastLogDate.getTime())) {
-            const now = new Date();
-            const diffTime = Math.abs(now.getTime() - lastLogDate.getTime());
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-            if (diffDays >= 14) setShowCheckInModal(true);
-          }
-        }
       }
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -147,6 +136,7 @@ const App: React.FC = () => {
     setWorkoutPlan(null);
     setProgressLogs([]);
     setShowCheckInModal(false);
+    setLoading(false);
   };
 
   const handleStartCheckIn = () => {
@@ -167,20 +157,15 @@ const App: React.FC = () => {
     const xDiff = touchStart.current.x - touchEnd.x;
     const yDiff = touchStart.current.y - touchEnd.y;
 
-    // Check for horizontal swipe vs vertical scroll
     if (Math.abs(xDiff) > Math.abs(yDiff) && Math.abs(xDiff) > 50) {
         const isLeftEdge = touchStart.current.x < 40;
         const isRightEdge = touchStart.current.x > window.innerWidth - 40;
-
-        // Navigation Order
         const tabs: Array<typeof currentTab> = ['dashboard', 'supplements', 'progress', 'profile'];
         const idx = tabs.indexOf(currentTab);
 
-        // Swipe Left (<-) : Next Tab (if started from Right Edge)
         if (xDiff > 0 && isRightEdge) {
             if (idx < tabs.length - 1) setCurrentTab(tabs[idx + 1]);
         }
-        // Swipe Right (->) : Prev Tab (if started from Left Edge)
         else if (xDiff < 0 && isLeftEdge) {
             if (idx > 0) setCurrentTab(tabs[idx - 1]);
         }
@@ -188,33 +173,17 @@ const App: React.FC = () => {
     touchStart.current = null;
   };
 
-  // Determine Background Colors based on Time
   const getAmbientColors = () => {
       switch(timePhase) {
-          case 'morning': return {
-              orb1: 'bg-orange-500/20',
-              orb2: 'bg-blue-500/10',
-              orb3: 'bg-yellow-500/10'
-          };
-          case 'noon': return {
-              orb1: 'bg-sky-400/20',
-              orb2: 'bg-blue-600/10',
-              orb3: 'bg-cyan-300/10'
-          };
-          case 'evening': return {
-              orb1: 'bg-purple-600/20',
-              orb2: 'bg-orange-600/20',
-              orb3: 'bg-pink-600/10'
-          };
-          default: return { // Night
-              orb1: 'bg-indigo-900/20',
-              orb2: 'bg-blue-900/10',
-              orb3: 'bg-slate-800/20'
-          };
+          case 'morning': return { orb1: 'bg-orange-500/20', orb2: 'bg-blue-500/10', orb3: 'bg-yellow-500/10' };
+          case 'noon': return { orb1: 'bg-sky-400/20', orb2: 'bg-blue-600/10', orb3: 'bg-cyan-300/10' };
+          case 'evening': return { orb1: 'bg-purple-600/20', orb2: 'bg-orange-600/20', orb3: 'bg-pink-600/10' };
+          default: return { orb1: 'bg-indigo-900/20', orb2: 'bg-blue-900/10', orb3: 'bg-slate-800/20' };
       }
   };
 
   const ambient = getAmbientColors();
+  const userId = session?.user?.id;
 
   if (loading) {
     return (
@@ -229,9 +198,16 @@ const App: React.FC = () => {
   }
 
   if (!session) return <Auth />;
+  
   if (!profile) return (
       <div className="fixed inset-0 bg-dark overflow-y-auto overflow-x-hidden">
-        <Onboarding onComplete={(p) => { setProfile(p); fetchUserData(session.user.id); }} onSignOut={handleSignOut} />
+        <Onboarding 
+            onComplete={(p) => { 
+                setProfile(p); 
+                fetchUserData(session.user.id); 
+            }} 
+            onSignOut={handleSignOut} 
+        />
       </div>
   );
 
@@ -244,11 +220,8 @@ const App: React.FC = () => {
       
       {/* Cinematic Dynamic Background */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-         {/* Top Orb */}
          <div className={`absolute top-[-20%] left-[-10%] w-[80%] h-[80%] ${ambient.orb1} blur-[120px] rounded-full will-change-transform animate-[meshMove_20s_infinite_alternate] transition-colors duration-[3000ms]`}></div>
-         {/* Bottom Orb */}
          <div className={`absolute bottom-[-20%] right-[-10%] w-[80%] h-[80%] ${ambient.orb2} blur-[120px] rounded-full will-change-transform animate-[meshMove_25s_infinite_alternate-reverse] transition-colors duration-[3000ms]`}></div>
-         {/* Middle Accent */}
          <div className={`absolute top-1/3 left-1/3 w-[50%] h-[50%] ${ambient.orb3} blur-[100px] rounded-full opacity-50 will-change-transform animate-pulse-slow transition-colors duration-[3000ms]`}></div>
       </div>
 
@@ -266,7 +239,7 @@ const App: React.FC = () => {
           {currentTab === 'dashboard' && (
              <Dashboard 
                 profile={profile} 
-                userId={session.user.id} 
+                userId={userId} 
                 workoutPlan={workoutPlan} 
                 logs={progressLogs} 
                 onSignOut={handleSignOut} 
@@ -277,7 +250,7 @@ const App: React.FC = () => {
           {currentTab === 'supplements' && (
              <SupplementAdvisor 
                 profile={profile}
-                userId={session.user.id}
+                userId={userId}
                 existingPlan={workoutPlan}
              />
           )}
@@ -297,7 +270,7 @@ const App: React.FC = () => {
       {!showChat && (
         <button 
             onClick={() => setShowChat(true)}
-            className="absolute bottom-24 right-5 w-14 h-14 bg-gradient-to-tr from-primary to-yellow-400 rounded-full shadow-2xl shadow-primary/30 flex items-center justify-center z-40 transition-transform active:scale-90 duration-300 ease-spring border-2 border-white/20 gpu hover:scale-105"
+            className="fixed bottom-24 right-5 w-14 h-14 bg-gradient-to-tr from-primary to-yellow-400 rounded-full shadow-2xl shadow-primary/30 flex items-center justify-center z-40 transition-transform active:scale-90 duration-300 ease-spring border-2 border-white/20 gpu hover:scale-105"
         >
             <i className="fas fa-robot text-dark text-2xl drop-shadow-sm"></i>
         </button>

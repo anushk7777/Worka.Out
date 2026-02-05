@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './services/supabaseClient';
 import Auth from './components/Auth';
 import Onboarding from './components/Onboarding';
@@ -13,35 +13,66 @@ import { UserProfile, ProgressEntry, ActivityLevel, Goal, Gender, PersonalizedPl
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
+  const [isGuest, setIsGuest] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [workoutPlan, setWorkoutPlan] = useState<PersonalizedPlan | null>(null);
   const [progressLogs, setProgressLogs] = useState<ProgressEntry[]>([]);
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'supplements' | 'progress' | 'profile'>('dashboard');
   const [loading, setLoading] = useState(true);
+  
+  // Data Synchronization State
   const [planVersion, setPlanVersion] = useState(0);
+  
+  // Check-in logic states
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [autoLaunchScanner, setAutoLaunchScanner] = useState(false);
+  
+  // Chat State
   const [showChat, setShowChat] = useState(false);
 
+  // Gesture State
+  const touchStart = useRef<{x: number, y: number} | null>(null);
+
+  // Contextual Background State
+  const [timePhase, setTimePhase] = useState<'morning' | 'noon' | 'evening' | 'night'>('night');
+
   useEffect(() => {
+    // Determine Time Phase for Ambient Background
+    const updateTimePhase = () => {
+        const h = new Date().getHours();
+        if (h >= 5 && h < 11) setTimePhase('morning');
+        else if (h >= 11 && h < 16) setTimePhase('noon');
+        else if (h >= 16 && h < 20) setTimePhase('evening');
+        else setTimePhase('night');
+    };
+    updateTimePhase();
+    const interval = setInterval(updateTimePhase, 60000 * 30); // Check every 30 mins
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) fetchUserData(session.user.id);
-      else setLoading(false);
+      else if (!isGuest) setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) fetchUserData(session.user.id);
-      else {
-        setProfile(null);
-        setWorkoutPlan(null);
+      if (session) {
+        setIsGuest(false);
+        fetchUserData(session.user.id);
+      } else {
+        if (!isGuest) {
+          setProfile(null);
+          setWorkoutPlan(null);
+        }
         setLoading(false);
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+        subscription.unsubscribe();
+        clearInterval(interval);
+    };
+  }, [isGuest]);
 
   const fetchUserData = async (userId: string) => {
     setLoading(true);
@@ -83,24 +114,17 @@ const App: React.FC = () => {
           photo_url: log.photo_url
         }));
         setProgressLogs(formattedLogs);
-
-        if (formattedLogs.length > 0) {
-          const lastLog = formattedLogs[formattedLogs.length - 1];
-          const lastLogDateStr = lastLog.created_at || lastLog.date;
-          const lastLogDate = new Date(lastLogDateStr);
-          if (!isNaN(lastLogDate.getTime())) {
-            const now = new Date();
-            const diffTime = Math.abs(now.getTime() - lastLogDate.getTime());
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-            if (diffDays >= 14) setShowCheckInModal(true);
-          }
-        }
       }
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGuestLogin = () => {
+      setIsGuest(true);
+      setLoading(false);
   };
 
   const handleAddLog = (log: ProgressEntry) => {
@@ -110,11 +134,14 @@ const App: React.FC = () => {
   };
 
   const handleUpdateProfile = (updatedProfile: UserProfile) => setProfile(updatedProfile);
-  const handlePlanRegenerated = () => setPlanVersion(prev => prev + 1);
+
+  const handlePlanRegenerated = () => {
+    setPlanVersion(prev => prev + 1);
+  };
 
   const handleSignOut = async () => {
-    setLoading(true);
-    await supabase.auth.signOut();
+    if (!isGuest) await supabase.auth.signOut();
+    setIsGuest(false);
     setProfile(null);
     setWorkoutPlan(null);
     setProgressLogs([]);
@@ -128,29 +155,90 @@ const App: React.FC = () => {
     setTimeout(() => setAutoLaunchScanner(true), 100);
   };
 
+  // --- Gesture Navigation Logic ---
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStart.current) return;
+    const touchEnd = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+    
+    const xDiff = touchStart.current.x - touchEnd.x;
+    const yDiff = touchStart.current.y - touchEnd.y;
+
+    if (Math.abs(xDiff) > Math.abs(yDiff) && Math.abs(xDiff) > 50) {
+        const isLeftEdge = touchStart.current.x < 40;
+        const isRightEdge = touchStart.current.x > window.innerWidth - 40;
+        const tabs: Array<typeof currentTab> = ['dashboard', 'supplements', 'progress', 'profile'];
+        const idx = tabs.indexOf(currentTab);
+
+        if (xDiff > 0 && isRightEdge) {
+            if (idx < tabs.length - 1) setCurrentTab(tabs[idx + 1]);
+        }
+        else if (xDiff < 0 && isLeftEdge) {
+            if (idx > 0) setCurrentTab(tabs[idx - 1]);
+        }
+    }
+    touchStart.current = null;
+  };
+
+  const getAmbientColors = () => {
+      switch(timePhase) {
+          case 'morning': return { orb1: 'bg-orange-500/20', orb2: 'bg-blue-500/10', orb3: 'bg-yellow-500/10' };
+          case 'noon': return { orb1: 'bg-sky-400/20', orb2: 'bg-blue-600/10', orb3: 'bg-cyan-300/10' };
+          case 'evening': return { orb1: 'bg-purple-600/20', orb2: 'bg-orange-600/20', orb3: 'bg-pink-600/10' };
+          default: return { orb1: 'bg-indigo-900/20', orb2: 'bg-blue-900/10', orb3: 'bg-slate-800/20' };
+      }
+  };
+
+  const ambient = getAmbientColors();
+  const userId = session?.user?.id || (isGuest ? 'guest-user' : '');
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-dark flex flex-col items-center justify-center z-[9999]">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] bg-primary/20 rounded-full blur-[110px] animate-pulse-slow"></div>
+        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 ${ambient.orb1} rounded-full blur-[100px] animate-pulse-slow`}></div>
         <div className="relative z-10 flex flex-col items-center">
-            <div className="w-16 h-16 border-[4px] border-primary/5 border-t-primary rounded-full animate-spin mb-10"></div>
-            <p className="text-white font-black tracking-[0.4em] text-[10px] uppercase animate-pulse">Initializing Neural Link</p>
+            <div className="w-14 h-14 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin mb-6"></div>
+            <p className="text-white font-bold tracking-[0.2em] text-[10px] uppercase animate-pulse">Initializing Neural Link</p>
         </div>
       </div>
     );
   }
 
-  if (!session) return <Auth />;
+  if (!session && !isGuest) return <Auth onGuestLogin={handleGuestLogin} />;
   
   if (!profile) return (
       <div className="fixed inset-0 bg-dark overflow-y-auto overflow-x-hidden">
-        <Onboarding onComplete={(p) => { setProfile(p); fetchUserData(session.user.id); }} onSignOut={handleSignOut} />
+        <Onboarding 
+            onComplete={(p) => { 
+                setProfile(p); 
+                if (!isGuest && session) fetchUserData(session.user.id); 
+            }} 
+            onSignOut={handleSignOut} 
+        />
       </div>
   );
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-transparent text-gray-200 font-sans overflow-hidden relative selection:bg-primary/30">
+    <div 
+        className="flex flex-col h-[100dvh] bg-dark text-gray-200 font-sans overflow-hidden relative selection:bg-primary/30"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+    >
       
+      {/* Cinematic Dynamic Background */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+         <div className={`absolute top-[-20%] left-[-10%] w-[80%] h-[80%] ${ambient.orb1} blur-[120px] rounded-full will-change-transform animate-[meshMove_20s_infinite_alternate] transition-colors duration-[3000ms]`}></div>
+         <div className={`absolute bottom-[-20%] right-[-10%] w-[80%] h-[80%] ${ambient.orb2} blur-[120px] rounded-full will-change-transform animate-[meshMove_25s_infinite_alternate-reverse] transition-colors duration-[3000ms]`}></div>
+         <div className={`absolute top-1/3 left-1/3 w-[50%] h-[50%] ${ambient.orb3} blur-[100px] rounded-full opacity-50 will-change-transform animate-pulse-slow transition-colors duration-[3000ms]`}></div>
+      </div>
+
+      {isGuest && (
+          <div className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-yellow-500 via-red-500 to-yellow-500 z-[9999]"></div>
+      )}
+
       {showCheckInModal && <CheckInDueModal onConfirm={handleStartCheckIn} onDismiss={() => setShowCheckInModal(false)} />}
       
       {showChat && (
@@ -159,12 +247,13 @@ const App: React.FC = () => {
           </div>
       )}
 
-      <main className="flex-1 overflow-y-auto no-scrollbar scroll-smooth pb-[140px] pt-[calc(var(--sat)+1rem)] relative z-10 w-full max-w-lg mx-auto md:max-w-xl lg:max-w-2xl xl:max-w-4xl px-5 scroll-glow">
+      {/* Content Area with Safe Area Padding */}
+      <main className="flex-1 overflow-y-auto no-scrollbar scroll-smooth pb-[100px] pt-[var(--sat)] relative z-10 w-full max-w-lg mx-auto md:max-w-xl lg:max-w-2xl xl:max-w-4xl">
         <div className="animate-fade-in">
           {currentTab === 'dashboard' && (
              <Dashboard 
                 profile={profile} 
-                userId={session.user.id} 
+                userId={userId} 
                 workoutPlan={workoutPlan} 
                 logs={progressLogs} 
                 onSignOut={handleSignOut} 
@@ -175,7 +264,7 @@ const App: React.FC = () => {
           {currentTab === 'supplements' && (
              <SupplementAdvisor 
                 profile={profile}
-                userId={session.user.id}
+                userId={userId}
                 existingPlan={workoutPlan}
              />
           )}
@@ -191,36 +280,57 @@ const App: React.FC = () => {
         </div>
       </main>
 
+      {/* Floating Chat Button */}
       {!showChat && (
         <button 
             onClick={() => setShowChat(true)}
-            className="fixed bottom-[115px] right-6 w-14 h-14 bg-gradient-to-tr from-primary to-yellow-400 rounded-full shadow-[0_15px_35px_rgba(255,215,0,0.35)] flex items-center justify-center z-40 transition-transform haptic-press duration-300 ease-spring border border-white/40 gpu"
+            className="fixed bottom-24 right-5 w-14 h-14 bg-gradient-to-tr from-primary to-yellow-400 rounded-full shadow-2xl shadow-primary/30 flex items-center justify-center z-40 transition-transform active:scale-90 duration-300 ease-spring border-2 border-white/20 gpu hover:scale-105"
         >
             <i className="fas fa-robot text-dark text-2xl drop-shadow-sm"></i>
         </button>
       )}
 
-      {/* Modern Floating Dock */}
-      <nav className="fixed bottom-8 left-6 right-6 h-[72px] z-50 flex justify-center">
-        <div className="liquid-dock w-full max-w-sm rounded-[36px] px-2 flex justify-around items-center h-full inner-glow transform active:scale-[0.99] transition-transform duration-500">
-          {[
-            { id: 'dashboard', icon: 'fa-chart-pie', label: 'PLAN' },
-            { id: 'progress', icon: 'fa-chart-line', label: 'LOG' },
-            { id: 'supplements', icon: 'fa-flask', label: 'SUPP' },
-            { id: 'profile', icon: 'fa-user', label: 'YOU' }
-          ].map((tab) => (
-            <button 
-              key={tab.id}
-              onClick={() => setCurrentTab(tab.id as any)} 
-              className={`group flex flex-col items-center justify-center w-14 h-14 transition-all duration-500 ease-spring haptic-press`}
-            >
-              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 ease-spring ${currentTab === tab.id ? 'bg-primary text-dark shadow-[0_6px_20px_rgba(255,215,0,0.4)] scale-110' : 'text-gray-500 group-hover:bg-white/5'}`}>
-                <i className={`fas ${tab.icon} text-lg`}></i>
-              </div>
-              <span className={`text-[8px] font-black tracking-[0.2em] mt-1 transition-all duration-500 ${currentTab === tab.id ? 'opacity-100 translate-y-0 text-primary' : 'opacity-0 -translate-y-1'}`}>{tab.label}</span>
-            </button>
-          ))}
-        </div>
+      {/* Glass Bottom Nav */}
+      <nav className="glass-heavy fixed bottom-0 left-0 right-0 h-[85px] pb-[var(--sab)] flex justify-around items-center px-2 z-50 border-t border-white/5">
+        <button 
+          onClick={() => setCurrentTab('dashboard')}
+          className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
+        >
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'dashboard' ? 'bg-primary text-dark shadow-[0_0_20px_rgba(255,215,0,0.4)] translate-y-[-4px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
+            <i className={`fas fa-chart-pie text-lg ${currentTab === 'dashboard' ? 'scale-110' : ''}`}></i>
+          </div>
+          <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${currentTab === 'dashboard' ? 'text-primary' : 'text-gray-500'}`}>PLAN</span>
+        </button>
+
+        <button 
+          onClick={() => setCurrentTab('progress')}
+          className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
+        >
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'progress' ? 'bg-primary text-dark shadow-[0_0_20px_rgba(255,215,0,0.4)] translate-y-[-4px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
+            <i className={`fas fa-chart-line text-lg ${currentTab === 'progress' ? 'scale-110' : ''}`}></i>
+          </div>
+          <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${currentTab === 'progress' ? 'text-primary' : 'text-gray-500'}`}>LOG</span>
+        </button>
+
+        <button 
+          onClick={() => setCurrentTab('supplements')}
+          className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
+        >
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'supplements' ? 'bg-primary text-dark shadow-[0_0_20px_rgba(255,215,0,0.4)] translate-y-[-4px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
+            <i className={`fas fa-flask text-lg ${currentTab === 'supplements' ? 'scale-110' : ''}`}></i>
+          </div>
+          <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${currentTab === 'supplements' ? 'text-primary' : 'text-gray-500'}`}>SUPP</span>
+        </button>
+
+        <button 
+          onClick={() => setCurrentTab('profile')}
+          className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
+        >
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'profile' ? 'bg-primary text-dark shadow-[0_0_20px_rgba(255,215,0,0.4)] translate-y-[-4px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
+            <i className={`fas fa-user text-lg ${currentTab === 'profile' ? 'scale-110' : ''}`}></i>
+          </div>
+          <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${currentTab === 'profile' ? 'text-primary' : 'text-gray-500'}`}>YOU</span>
+        </button>
       </nav>
     </div>
   );
