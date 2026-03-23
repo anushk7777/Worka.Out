@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { ProgressEntry, UserProfile } from '../types';
+import { ProgressEntry, UserProfile, PersonalizedPlan } from '../types';
 import { supabase } from '../services/supabaseClient';
 import BodyFatAnalyzer from './BodyFatAnalyzer';
 import ComparisonSlider from './ComparisonSlider';
+import WorkoutHologram from './WorkoutHologram';
 import { generateWorkoutSplit } from '../services/geminiService';
 import { calculatePlan } from './Calculator';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,9 +15,11 @@ interface Props {
   profile: UserProfile; 
   launchScanner?: boolean;
   onScannerLaunched?: () => void;
+  workoutPlan?: PersonalizedPlan;
+  isGuest?: boolean;
 }
 
-const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScanner, onScannerLaunched }) => {
+const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScanner, onScannerLaunched, workoutPlan, isGuest }) => {
   const [weight, setWeight] = useState(profile.weight);
   const [bodyFat, setBodyFat] = useState('');
   const [notes, setNotes] = useState('');
@@ -82,67 +85,81 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
     setLoading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not logged in");
-
       let photoUrl = null;
-
-      // 1. Upload Photo if exists
-      if (photoFile) {
-        const fileExt = photoFile.name.split('.').pop();
-        const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('progress_photos')
-          .upload(fileName, photoFile);
-
-        if (uploadError) throw uploadError;
-
-        // Get Public URL
-        const { data: urlData } = supabase.storage
-          .from('progress_photos')
-          .getPublicUrl(fileName);
-          
-        photoUrl = urlData.publicUrl;
-      }
-
-      // 2. Insert Log
-      // Append flags to notes for persistence without schema migration if columns don't exist yet
+      let finalNotes = notes;
       const flagsStr = JSON.stringify({ type: weighInType, flags });
-      const finalNotes = notes ? `${notes} || META: ${flagsStr}` : `META: ${flagsStr}`;
+      finalNotes = notes ? `${notes} || META: ${flagsStr}` : `META: ${flagsStr}`;
 
-      const logData = {
-        user_id: user.id,
-        date: getTodayISO(), 
-        weight: Number(weight),
-        body_fat: bodyFat ? Number(bodyFat) : null,
-        photo_url: photoUrl,
-        notes: finalNotes,
-      };
-      
-      const { data, error } = await supabase
-        .from('progress_logs')
-        .insert([logData])
-        .select()
-        .single();
+      if (!isGuest) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Not logged in");
 
-      if (error) throw error;
+        // 1. Upload Photo if exists
+        if (photoFile) {
+          const fileExt = photoFile.name.split('.').pop();
+          const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from('progress_photos')
+            .upload(fileName, photoFile);
 
-      // 3. Update local state
-      // Parse back the metadata for UI
-      const parsedLog: ProgressEntry = {
-        id: data.id,
-        date: data.date,
-        created_at: data.created_at,
-        weight: data.weight,
-        bodyFat: data.body_fat,
-        photo_url: data.photo_url,
-        notes: data.notes,
-        weigh_in_type: weighInType,
-        flags: flags
-      };
+          if (uploadError) throw uploadError;
 
-      onAddLog(parsedLog);
+          // Get Public URL
+          const { data: urlData } = supabase.storage
+            .from('progress_photos')
+            .getPublicUrl(fileName);
+            
+          photoUrl = urlData.publicUrl;
+        }
+
+        // 2. Insert Log
+        const logData = {
+          user_id: user.id,
+          date: getTodayISO(), 
+          weight: Number(weight),
+          body_fat: bodyFat ? Number(bodyFat) : null,
+          photo_url: photoUrl,
+          notes: finalNotes,
+        };
+        
+        const { data, error } = await supabase
+          .from('progress_logs')
+          .insert([logData])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // 3. Update local state
+        const parsedLog: ProgressEntry = {
+          id: data.id,
+          date: data.date,
+          created_at: data.created_at,
+          weight: data.weight,
+          bodyFat: data.body_fat,
+          photo_url: data.photo_url,
+          notes: data.notes,
+          weigh_in_type: weighInType,
+          flags: flags
+        };
+
+        onAddLog(parsedLog);
+      } else {
+        // Guest mode: just update local state
+        const parsedLog: ProgressEntry = {
+          id: `guest-log-${Date.now()}`,
+          date: getTodayISO(),
+          created_at: new Date().toISOString(),
+          weight: Number(weight),
+          bodyFat: bodyFat ? Number(bodyFat) : undefined,
+          photo_url: photoPreview || undefined,
+          notes: finalNotes,
+          weigh_in_type: weighInType,
+          flags: flags
+        };
+        onAddLog(parsedLog);
+      }
 
       // --- AUTO-SCALE LOGIC ---
       const weightDiff = Math.abs(weight - profile.weight);
@@ -150,7 +167,7 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
       const needsCorrection = (profile.goal === 'Fat Loss' && weight > profile.weight + 0.3);
       
       if (weightDiff >= 0.5 || needsCorrection) {
-        await regeneratePlan(user.id, weight);
+        await regeneratePlan(isGuest ? 'guest' : (await supabase.auth.getUser()).data.user?.id || '', weight);
       } else {
         alert('Progress logged successfully!');
       }
@@ -175,6 +192,20 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
   const regeneratePlan = async (userId: string, newWeight: number) => {
     setRegenerating(true);
     try {
+        if (isGuest) {
+            // For guest, we just calculate new macros and alert
+            const updatedProfileRaw: UserProfile = { ...profile, weight: newWeight };
+            const newMacros = calculatePlan(updatedProfileRaw, profile.weight, 1);
+            
+            const alertMsg = newMacros.adaptationReason 
+                ? `Update: ${newMacros.adaptationReason} New Target: ${newMacros.calories} kcal.`
+                : `Progress logged! Profile updated to ${newWeight}kg. New Target: ${newMacros.calories} kcal.`;
+                
+            alert(alertMsg);
+            setRegenerating(false);
+            return;
+        }
+
         const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
@@ -249,6 +280,8 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
         <h1 className="text-2xl font-bold text-primary mb-2">Log Monitor</h1>
         <p className="text-gray-400 text-sm">Track your progress. Significant weight changes will automatically update your profile and stats.</p>
       </div>
+
+      <WorkoutHologram workoutPlan={workoutPlan || null} />
 
       {/* Input Section */}
       <div className="glass-premium p-0 rounded-[24px] border border-white/10 relative overflow-hidden">

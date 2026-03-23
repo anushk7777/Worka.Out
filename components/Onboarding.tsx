@@ -7,11 +7,12 @@ import { calculatePlan } from './Calculator';
 import BodyFatAnalyzer from './BodyFatAnalyzer';
 
 interface Props {
-  onComplete: (profile: UserProfile) => void;
-  onSignOut: () => void; // New prop
+  onComplete: (profile: UserProfile, workoutPlan?: any) => void;
+  onSignOut: () => void;
+  isGuest?: boolean;
 }
 
-const Onboarding: React.FC<Props> = ({ onComplete, onSignOut }) => {
+const Onboarding: React.FC<Props> = ({ onComplete, onSignOut, isGuest }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("Saving...");
@@ -51,11 +52,24 @@ const Onboarding: React.FC<Props> = ({ onComplete, onSignOut }) => {
     setLoadingText("Initializing your journey...");
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No user found");
-
       const finalProfile = formData as UserProfile;
       const calculatedMacros = calculatePlan(finalProfile);
+      
+      finalProfile.daily_calories = calculatedMacros.calories;
+      finalProfile.weekly_calories = calculatedMacros.calories * 7;
+
+      if (isGuest) {
+        setLoadingText("Generating Weekly Workout Split...");
+        const workoutPlan = await generateWorkoutSplit(finalProfile);
+        // For guests, we just complete the flow without saving to Supabase
+        // The App component will handle setting the state
+        onComplete(finalProfile, workoutPlan);
+        setLoading(false);
+        return;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No user found");
 
       setLoadingText("Saving Profile & Budget...");
       const profileData = {
@@ -111,7 +125,7 @@ const Onboarding: React.FC<Props> = ({ onComplete, onSignOut }) => {
       
       await supabase.from('user_plans').upsert(planData);
 
-      onComplete(finalProfile);
+      onComplete(finalProfile, workoutPlan);
     } catch (err) {
       console.error("Error saving profile:", err);
       alert("Failed to save profile. Please try again.");

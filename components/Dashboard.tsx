@@ -20,6 +20,7 @@ interface Props {
   refreshTrigger?: number; 
   isGeneratingPlan: boolean;
   setIsGeneratingPlan: (val: boolean) => void;
+  isGuest?: boolean;
 }
 
 type DietType = 'veg' | 'egg' | 'non-veg';
@@ -115,7 +116,7 @@ const FadeInItem: React.FC<{ children: React.ReactNode, delay?: number }> = ({ c
   );
 };
 
-export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], onSignOut, onNavigate, refreshTrigger, isGeneratingPlan, setIsGeneratingPlan }) => {
+export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], onSignOut, onNavigate, refreshTrigger, isGeneratingPlan, setIsGeneratingPlan, isGuest }) => {
   // 1. Calculate Plan Source of Truth with ULTRA-ELITE ENGINE
   const plan: MacroPlan = useMemo(() => {
     return profile.daily_calories 
@@ -148,6 +149,27 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
   const [editingMeal, setEditingMeal] = useState<{index: number, name: string} | null>(null);
   const [editInstruction, setEditInstruction] = useState('');
   const [isEditingMeal, setIsEditingMeal] = useState(false);
+  const [editItems, setEditItems] = useState<{originalString: string, qty: number | null, unit: string, name: string, currentQty: number | null, foodItem?: FoodItem}[]>([]);
+
+  useEffect(() => {
+    if (editingMeal && todayPlan) {
+      const meal = todayPlan.meals[editingMeal.index];
+      const parsed = meal.items.map(itemStr => {
+        const match = itemStr.match(/^([\d.]+)\s*(g|ml|pcs|tbsp|tsp|cup|oz|lb)?\s+(.*)$/i);
+        if (match) {
+          const qty = parseFloat(match[1]);
+          const unit = match[2] || '';
+          const name = match[3].trim();
+          const foodItem = FOOD_DATABASE.find(f => name.toLowerCase().includes(f.name.toLowerCase()) || f.name.toLowerCase().includes(name.toLowerCase()));
+          return { originalString: itemStr, qty: isNaN(qty) ? null : qty, unit, name, currentQty: isNaN(qty) ? null : qty, foodItem };
+        }
+        return { originalString: itemStr, qty: null, unit: '', name: itemStr, currentQty: null };
+      });
+      setEditItems(parsed);
+    } else {
+      setEditItems([]);
+    }
+  }, [editingMeal, todayPlan]);
 
   const [addFoodModal, setAddFoodModal] = useState(false);
   const [addFoodInput, setAddFoodInput] = useState('');
@@ -306,6 +328,11 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
 
   const fetchDailyPlans = async () => {
     const today = getTodayDate();
+    if (isGuest) {
+        setLoading(false);
+        setIsSyncing(false);
+        return;
+    }
     try {
         const { data, error } = await supabase.from('daily_meal_plans').select('*').eq('user_id', userId).order('date', { ascending: false }).limit(10); 
         if (error) throw error;
@@ -329,6 +356,7 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
     if (isNowCompleted) {
         triggerVisualHaptic('success', `meal-${index}`);
     }
+    if (isGuest) return;
     try {
         await supabase.from('daily_meal_plans').update({ meals: updatedMeals }).eq('id', todayPlan.id);
         setRecentPlans(prev => [updatedPlan, ...(prev || []).filter(p => p.date !== todayPlan.date)]);
@@ -388,14 +416,16 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
         );
         if (!newPlan || !newPlan.meals || !Array.isArray(newPlan.meals)) throw new Error("Invalid plan generated");
         
-        const { error: upsertError } = await supabase.from('daily_meal_plans').upsert({ 
-            user_id: userId, 
-            date: today, 
-            meals: newPlan.meals, 
-            macros: newPlan.macros 
-        }, { onConflict: 'user_id, date' });
-        
-        if (upsertError) throw upsertError;
+        if (!isGuest) {
+            const { error: upsertError } = await supabase.from('daily_meal_plans').upsert({ 
+                user_id: userId, 
+                date: today, 
+                meals: newPlan.meals, 
+                macros: newPlan.macros 
+            }, { onConflict: 'user_id, date' });
+            
+            if (upsertError) throw upsertError;
+        }
         
         setTodayPlan(newPlan);
         setRecentPlans(prev => [newPlan, ...(prev || []).filter(p => p.date !== today)]);
@@ -412,17 +442,99 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
   };
 
   const handleSubmitEdit = async () => {
-    if (!editingMeal || !todayPlan || !editInstruction.trim()) return;
+    if (!editingMeal || !todayPlan) return;
     setIsEditingMeal(true);
     try {
-        const updatedPlan = await handleDietDeviation(todayPlan, plan, editingMeal.index, editInstruction);
-        if (!updatedPlan || !updatedPlan.meals) throw new Error("Failed to edit meal");
-        await supabase.from('daily_meal_plans').upsert({ 
-             user_id: userId, 
-             date: todayPlan.date, 
-             meals: updatedPlan.meals, 
-             macros: updatedPlan.macros 
-        }, { onConflict: 'user_id, date' });
+        let updatedPlan = todayPlan;
+        
+        if (editInstruction.trim()) {
+            updatedPlan = await handleDietDeviation(todayPlan, plan, editingMeal.index, editInstruction);
+            if (!updatedPlan || !updatedPlan.meals) throw new Error("Failed to edit meal");
+        } else {
+            const originalMeal = todayPlan.meals[editingMeal.index];
+            let newP = originalMeal.macros.p;
+            let newC = originalMeal.macros.c;
+            let newF = originalMeal.macros.f;
+            let newCal = originalMeal.macros.cal;
+            
+            let exactMathPossible = true;
+            let totalOriginalQty = 0;
+            let totalCurrentQty = 0;
+            
+            editItems.forEach(item => {
+              if (item.qty !== null && item.currentQty !== null) {
+                totalOriginalQty += item.qty;
+                totalCurrentQty += item.currentQty;
+                if (item.qty !== item.currentQty && !item.foodItem) {
+                  exactMathPossible = false;
+                }
+              }
+            });
+            
+            if (exactMathPossible) {
+                editItems.forEach(item => {
+                  if (item.qty !== null && item.currentQty !== null && item.qty !== item.currentQty && item.foodItem) {
+                    const deltaQty = item.currentQty - item.qty;
+                    const ratio = deltaQty / item.foodItem.base_amount;
+                    newP += item.foodItem.protein * ratio;
+                    newC += item.foodItem.carbs * ratio;
+                    newF += item.foodItem.fats * ratio;
+                    newCal += item.foodItem.calories * ratio;
+                  }
+                });
+            } else if (totalOriginalQty > 0 && totalOriginalQty !== totalCurrentQty) {
+                const ratio = totalCurrentQty / totalOriginalQty;
+                newP = originalMeal.macros.p * ratio;
+                newC = originalMeal.macros.c * ratio;
+                newF = originalMeal.macros.f * ratio;
+                newCal = originalMeal.macros.cal * ratio;
+            }
+            
+            const newItems = editItems.map(item => {
+              if (item.qty !== null && item.currentQty !== null && item.qty !== item.currentQty) {
+                return `${item.currentQty}${item.unit ? item.unit : ''} ${item.name}`;
+              }
+              return item.originalString;
+            });
+            
+            const updatedMeal = {
+              ...originalMeal,
+              items: newItems,
+              macros: {
+                p: Math.round(Math.max(0, newP)),
+                c: Math.round(Math.max(0, newC)),
+                f: Math.round(Math.max(0, newF)),
+                cal: Math.round(Math.max(0, newCal))
+              }
+            };
+            
+            const newMeals = [...todayPlan.meals];
+            newMeals[editingMeal.index] = updatedMeal;
+            
+            const newDailyTotals = newMeals.reduce((acc, meal) => {
+              acc.p += meal.macros.p;
+              acc.c += meal.macros.c;
+              acc.f += meal.macros.f;
+              acc.cal += meal.macros.cal;
+              return acc;
+            }, { p: 0, c: 0, f: 0, cal: 0 });
+            
+            updatedPlan = {
+              ...todayPlan,
+              meals: newMeals,
+              macros: newDailyTotals
+            };
+        }
+
+        if (!isGuest) {
+            const { error: upsertError } = await supabase.from('daily_meal_plans').upsert({ 
+                 user_id: userId, 
+                 date: todayPlan.date, 
+                 meals: updatedPlan.meals, 
+                 macros: updatedPlan.macros 
+            }, { onConflict: 'user_id, date' });
+            if (upsertError) throw upsertError;
+        }
         setTodayPlan(updatedPlan);
         setRecentPlans(prev => [updatedPlan, ...(prev || []).filter(p => p.date !== todayPlan.date)]);
         setEditingMeal(null);
@@ -471,7 +583,9 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
               cal: (todayPlan.macros?.cal || 0) + newMeal.macros.cal
           };
           const updatedPlan = { ...todayPlan, meals: newMeals, macros: newTotals };
-          await supabase.from('daily_meal_plans').upsert({ user_id: userId, date: todayPlan.date, meals: updatedPlan.meals, macros: updatedPlan.macros }, { onConflict: 'user_id, date' });
+          if (!isGuest) {
+              await supabase.from('daily_meal_plans').upsert({ user_id: userId, date: todayPlan.date, meals: updatedPlan.meals, macros: updatedPlan.macros }, { onConflict: 'user_id, date' });
+          }
           setTodayPlan(updatedPlan);
           setRecentPlans(prev => [updatedPlan, ...(prev || []).filter(p => p.date !== todayPlan.date)]);
           setAddFoodModal(false); setAddFoodInput(''); setSearchResults([]); setSelectedFoodItem(null);
@@ -600,24 +714,53 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                     <div className="bg-primary/5 p-4 rounded-2xl border border-primary/20">
                         <p className="text-[10px] text-gray-300 leading-relaxed italic">
                             <i className="fas fa-info-circle text-primary mr-1"></i>
-                            Describe your change. The AI will recalculate macros and balance the rest of the day if needed.
+                            Adjust quantities directly for instant calculation, or describe complex changes for the AI to handle.
                         </p>
                     </div>
 
+                    {editItems.length > 0 && (
+                        <div className="space-y-3">
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Adjust Quantities</label>
+                            {editItems.map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between bg-white/5 rounded-xl p-3">
+                                    <div className="flex-1 pr-4 overflow-hidden">
+                                        <p className="text-sm text-white font-medium truncate">{item.name}</p>
+                                        <p className="text-[10px] text-gray-400">{item.qty !== null ? `Original: ${item.qty}${item.unit}` : 'Cannot adjust quantity'}</p>
+                                    </div>
+                                    {item.qty !== null && (
+                                        <div className="flex items-center gap-2 bg-black/40 rounded-lg p-1 border border-white/10 shrink-0">
+                                            <input 
+                                                type="number" 
+                                                value={item.currentQty === null ? '' : item.currentQty}
+                                                onChange={(e) => {
+                                                    const val = parseFloat(e.target.value);
+                                                    const newItems = [...editItems];
+                                                    newItems[idx] = { ...newItems[idx], currentQty: isNaN(val) ? null : val };
+                                                    setEditItems(newItems);
+                                                }}
+                                                className="w-16 bg-transparent text-white text-center text-sm font-bold outline-none"
+                                            />
+                                            <span className="text-xs text-gray-400 pr-2">{item.unit}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
                     <div>
-                         <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Modification</label>
+                         <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Or Describe Complex Changes</label>
                          <textarea 
                              value={editInstruction}
                              onChange={(e) => setEditInstruction(e.target.value)}
                              placeholder="E.g. I ate 2 boiled eggs instead. OR Swap this for a vegetarian option."
-                             className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm text-white focus:border-primary outline-none h-32 placeholder-gray-600 font-medium" 
-                             autoFocus
+                             className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm text-white focus:border-primary outline-none h-24 placeholder-gray-600 font-medium" 
                          />
                     </div>
 
                     <button 
                          onClick={handleSubmitEdit}
-                         disabled={isEditingMeal || !editInstruction.trim()}
+                         disabled={isEditingMeal || (!editInstruction.trim() && !editItems.some(i => i.qty !== null && i.currentQty !== null && i.currentQty !== i.qty))}
                          className="w-full bg-white text-dark font-black py-5 rounded-full text-[11px] uppercase tracking-[0.3em] shadow-xl haptic-press active:scale-95 transition-transform flex items-center justify-center gap-3 disabled:opacity-50 shine-effect"
                     >
                         {isEditingMeal ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-check"></i>}

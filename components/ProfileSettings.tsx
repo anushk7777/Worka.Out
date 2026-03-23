@@ -10,9 +10,10 @@ interface Props {
   onUpdateProfile: (updatedProfile: UserProfile) => void;
   onSignOut: () => void;
   onPlanRegenerated?: () => void;
+  isGuest?: boolean;
 }
 
-const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut }) => {
+const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut, isGuest }) => {
   const [formData, setFormData] = useState<UserProfile>({
       ...profile,
       dietary_preference: profile.dietary_preference || 'non-veg',
@@ -88,34 +89,36 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
     setShowRiskModal(false);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No user found");
-
       // 1. Calculate New Macros (Fresh start based on new stats & aggressiveness)
       const newMacros = calculatePlan(formData);
       
-      // 2. Update Profile in DB
-      const updates = {
-        name: formData.name,
-        age: formData.age,
-        weight: formData.weight,
-        height: formData.height,
-        gender: formData.gender,
-        goal: formData.goal,
-        activity_level: formData.activityLevel,
-        dietary_preference: formData.dietary_preference,
-        
-        // New Fields
-        medical_conditions: formData.medical_conditions,
-        goal_aggressiveness: formData.goal_aggressiveness,
+      if (!isGuest) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("No user found");
 
-        daily_calories: newMacros.calories,
-        weekly_calories: newMacros.calories * 7,
-        updated_at: new Date().toISOString()
-      };
+        // 2. Update Profile in DB
+        const updates = {
+          name: formData.name,
+          age: formData.age,
+          weight: formData.weight,
+          height: formData.height,
+          gender: formData.gender,
+          goal: formData.goal,
+          activity_level: formData.activityLevel,
+          dietary_preference: formData.dietary_preference,
+          
+          // New Fields
+          medical_conditions: formData.medical_conditions,
+          goal_aggressiveness: formData.goal_aggressiveness,
 
-      const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
-      if (error) throw error;
+          daily_calories: newMacros.calories,
+          weekly_calories: newMacros.calories * 7,
+          updated_at: new Date().toISOString()
+        };
+
+        const { error } = await supabase.from('profiles').update(updates).eq('id', user.id);
+        if (error) throw error;
+      }
 
       // Update Local State immediately
       onUpdateProfile({ 

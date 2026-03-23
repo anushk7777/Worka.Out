@@ -9,9 +9,10 @@ interface Props {
   profile: UserProfile;
   userId: string;
   existingPlan: PersonalizedPlan | null;
+  isGuest?: boolean;
 }
 
-const SupplementAdvisor: React.FC<Props> = ({ profile, userId, existingPlan }) => {
+const SupplementAdvisor: React.FC<Props> = ({ profile, userId, existingPlan, isGuest }) => {
   const [stack, setStack] = useState<SupplementRecommendation[]>(existingPlan?.supplement_stack || []);
   const [loading, setLoading] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
@@ -30,11 +31,13 @@ const SupplementAdvisor: React.FC<Props> = ({ profile, userId, existingPlan }) =
         const newStack = await generateSupplementStack(profile);
         if (newStack && newStack.length > 0) {
             setStack(newStack);
-            await supabase.from('user_plans').upsert({
-                user_id: userId,
-                workout_plan: existingPlan?.workout,
-                diet_plan: newStack 
-            });
+            if (!isGuest) {
+                await supabase.from('user_plans').upsert({
+                    user_id: userId,
+                    workout_plan: existingPlan?.workout,
+                    diet_plan: newStack 
+                });
+            }
         }
     } catch (e) {
         console.error("Failed to generate supplements", e);

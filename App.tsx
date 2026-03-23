@@ -214,8 +214,12 @@ const App: React.FC = () => {
   if (!profile) return (
       <div className="fixed inset-0 bg-dark overflow-y-auto overflow-x-hidden">
         <Onboarding 
-            onComplete={(p) => { 
+            isGuest={isGuest}
+            onComplete={(p, wp) => { 
                 setProfile(p); 
+                if (wp) {
+                    setWorkoutPlan({ workout: wp, supplement_stack: [] });
+                }
                 if (!isGuest && session) fetchUserData(session.user.id); 
             }} 
             onSignOut={handleSignOut} 
@@ -269,10 +273,11 @@ const App: React.FC = () => {
               profile={profile}
               userId={userId}
               existingPlan={workoutPlan}
+              isGuest={isGuest}
            />
         </div>
         <div className={`transition-all duration-300 ${currentTab === 'progress' ? 'opacity-100 translate-y-0 scale-100 relative z-10' : 'opacity-0 translate-y-4 scale-95 absolute inset-0 pointer-events-none z-0 overflow-hidden'}`}>
-           <ProgressTracker logs={progressLogs} onAddLog={handleAddLog} profile={profile} launchScanner={autoLaunchScanner} onScannerLaunched={() => setAutoLaunchScanner(false)} />
+           <ProgressTracker logs={progressLogs} onAddLog={handleAddLog} profile={profile} launchScanner={autoLaunchScanner} onScannerLaunched={() => setAutoLaunchScanner(false)} workoutPlan={workoutPlan} isGuest={isGuest} />
         </div>
         <div className={`transition-all duration-300 ${currentTab === 'profile' ? 'opacity-100 translate-y-0 scale-100 relative z-10' : 'opacity-0 translate-y-4 scale-95 absolute inset-0 pointer-events-none z-0 overflow-hidden'}`}>
           <ProfileSettings 
@@ -280,6 +285,7 @@ const App: React.FC = () => {
               onUpdateProfile={handleUpdateProfile} 
               onSignOut={handleSignOut}
               onPlanRegenerated={handlePlanRegenerated}
+              isGuest={isGuest}
           />
         </div>
       </main>

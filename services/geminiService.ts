@@ -93,8 +93,7 @@ export const generateTrainerResponse = async (
       contents: contents,
       config: { 
         tools: [{ googleSearch: {} }], 
-        temperature: 0.7,
-        thinkingConfig: { thinkingBudget: 8000 } // Reduced for speed/stability
+        temperature: 0.7
       }
     });
 
@@ -152,7 +151,6 @@ export const analyzeBodyComposition = async (
       model: "gemini-3.1-pro-preview", 
       contents: { parts: parts },
       config: { 
-        thinkingConfig: { thinkingBudget: 8000 },
         responseMimeType: "application/json",
         responseSchema: { 
           type: Type.OBJECT, 
@@ -180,7 +178,6 @@ export const generateWorkoutSplit = async (profile: UserProfile): Promise<Workou
             model: "gemini-3.1-pro-preview",
             contents: prompt,
             config: { 
-                thinkingConfig: { thinkingBudget: 8000 },
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
@@ -267,7 +264,6 @@ export const generateDailyMealPlan = async (
                 contents: prompt,
                 config: { 
                     maxOutputTokens: 32768, // Explicitly set max output tokens to allow room after thinking
-                    thinkingConfig: { thinkingBudget: 12000 }, 
                     responseMimeType: "application/json",
                     responseSchema: {
                       type: Type.OBJECT,
@@ -325,15 +321,66 @@ export const generateDailyMealPlan = async (
 };
 
 export const handleDietDeviation = async (currentPlan: DailyMealPlanDB, targetMacros: MacroPlan, mealIndex: number, userDescription: string): Promise<DailyMealPlanDB> => {
-    const prompt = `Adjust plan for deviation. Meal: ${currentPlan.meals[mealIndex].name}. User ate: "${userDescription}". Re-balance remaining meals to hit target: ${targetMacros.calories}kcal.`;
+    const prompt = `
+      You are a diet assistant. The user wants to edit a specific meal in their daily plan.
+      Current Plan: ${JSON.stringify(currentPlan)}
+      Meal to edit: Index ${mealIndex} (${currentPlan.meals[mealIndex].name})
+      User Instruction: "${userDescription}"
+
+      Task:
+      1. Modify ONLY the meal at index ${mealIndex} according to the user's instruction.
+      2. Recalculate the macros (protein, carbs, fats, calories) for that specific meal based on the new ingredients/quantities.
+      3. Recalculate the daily_totals by summing up the macros of all meals.
+      4. DO NOT change any other meals in the plan. Keep them exactly as they are. Do not rebalance the rest of the day.
+
+      Return the full updated plan in JSON format matching the original structure.
+    `;
     try {
         const ai = getAIClient();
         const response = await ai.models.generateContent({
-            model: "gemini-3.1-pro-preview", 
+            model: "gemini-3-flash-preview", 
             contents: prompt,
             config: { 
-                thinkingConfig: { thinkingBudget: 4000 }, 
-                responseMimeType: "application/json"
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    meals: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          name: { type: Type.STRING },
+                          time: { type: Type.STRING },
+                          items: { type: Type.ARRAY, items: { type: Type.STRING } },
+                          macros: {
+                            type: Type.OBJECT,
+                            properties: {
+                              p: { type: Type.NUMBER },
+                              c: { type: Type.NUMBER },
+                              f: { type: Type.NUMBER },
+                              cal: { type: Type.NUMBER }
+                            },
+                            required: ["p", "c", "f", "cal"]
+                          },
+                          isCompleted: { type: Type.BOOLEAN }
+                        },
+                        required: ["name", "time", "items", "macros"]
+                      }
+                    },
+                    daily_totals: {
+                      type: Type.OBJECT,
+                      properties: {
+                        p: { type: Type.NUMBER },
+                        c: { type: Type.NUMBER },
+                        f: { type: Type.NUMBER },
+                        cal: { type: Type.NUMBER }
+                      },
+                      required: ["p", "c", "f", "cal"]
+                    }
+                  },
+                  required: ["meals", "daily_totals"]
+                }
             } 
         });
         const data = JSON.parse(cleanJson(response.text));
@@ -342,15 +389,65 @@ export const handleDietDeviation = async (currentPlan: DailyMealPlanDB, targetMa
 };
 
 export const addFoodItem = async (currentPlan: DailyMealPlanDB, userDescription: string): Promise<DailyMealPlanDB> => {
-    const prompt = `Add item "${userDescription}" to plan. Estimate macros accurately. Return full updated plan JSON.`;
+    const prompt = `
+      You are a diet assistant. The user wants to add a food item to their daily plan.
+      Current Plan: ${JSON.stringify(currentPlan)}
+      User Instruction: "${userDescription}"
+
+      Task:
+      1. Add the food item described by the user as a new meal or append it to an appropriate existing meal.
+      2. Estimate the macros (protein, carbs, fats, calories) accurately for the new item.
+      3. Recalculate the macros for the affected meal and the daily_totals.
+      4. DO NOT change any other meals in the plan. Keep them exactly as they are.
+
+      Return the full updated plan in JSON format matching the original structure.
+    `;
     try {
         const ai = getAIClient();
         const response = await ai.models.generateContent({
-            model: "gemini-3.1-pro-preview", 
+            model: "gemini-3-flash-preview", 
             contents: prompt,
             config: { 
-                thinkingConfig: { thinkingBudget: 4000 }, 
-                responseMimeType: "application/json"
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    meals: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          name: { type: Type.STRING },
+                          time: { type: Type.STRING },
+                          items: { type: Type.ARRAY, items: { type: Type.STRING } },
+                          macros: {
+                            type: Type.OBJECT,
+                            properties: {
+                              p: { type: Type.NUMBER },
+                              c: { type: Type.NUMBER },
+                              f: { type: Type.NUMBER },
+                              cal: { type: Type.NUMBER }
+                            },
+                            required: ["p", "c", "f", "cal"]
+                          },
+                          isCompleted: { type: Type.BOOLEAN }
+                        },
+                        required: ["name", "time", "items", "macros"]
+                      }
+                    },
+                    daily_totals: {
+                      type: Type.OBJECT,
+                      properties: {
+                        p: { type: Type.NUMBER },
+                        c: { type: Type.NUMBER },
+                        f: { type: Type.NUMBER },
+                        cal: { type: Type.NUMBER }
+                      },
+                      required: ["p", "c", "f", "cal"]
+                    }
+                  },
+                  required: ["meals", "daily_totals"]
+                }
             } 
         });
         const data = JSON.parse(cleanJson(response.text));
@@ -379,7 +476,6 @@ export const generateSupplementStack = async (profile: UserProfile): Promise<Sup
             model: "gemini-3.1-pro-preview",
             contents: prompt,
             config: { 
-                thinkingConfig: { thinkingBudget: 8000 },
                 responseMimeType: "application/json",
                 responseSchema: {
                   type: Type.OBJECT,
