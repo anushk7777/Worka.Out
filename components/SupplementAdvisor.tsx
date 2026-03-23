@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { UserProfile, SupplementRecommendation, PersonalizedPlan } from '../types';
 import { generateSupplementStack } from '../services/geminiService';
 import { supabase } from '../services/supabaseClient';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
   profile: UserProfile;
@@ -56,7 +57,13 @@ const SupplementAdvisor: React.FC<Props> = ({ profile, userId, existingPlan }) =
     const isExpanded = expandedItems.has(index);
     
     return (
-        <div key={index} className="glass-card rounded-[32px] border border-white/10 relative overflow-hidden group transition-all duration-500 hover:border-white/30 animate-slide-up gpu" style={{ animationDelay: `${index * 0.1}s` }}>
+        <motion.div 
+            key={index} 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: index * 0.1, ease: "easeOut" }}
+            className="glass-premium rounded-[32px] border border-white/10 relative overflow-hidden group transition-all duration-500 hover:border-white/30 gpu"
+        >
             <div 
                 className="p-6 cursor-pointer relative z-10"
                 onClick={() => toggleExpand(index)}
@@ -94,7 +101,7 @@ const SupplementAdvisor: React.FC<Props> = ({ profile, userId, existingPlan }) =
                         <h4 className="text-[10px] uppercase font-black text-primary mb-3 tracking-[0.2em] flex items-center gap-2">
                             <i className="fas fa-microscope"></i> Bio-Pathway
                         </h4>
-                        <p className="text-sm text-gray-200 leading-relaxed font-medium bg-black/30 p-4 rounded-2xl border border-white/5">
+                        <p className="text-sm text-gray-200 leading-relaxed font-medium bg-black/30 p-4 rounded-[24px] border border-white/5">
                             {supp.mechanism}
                         </p>
                     </div>
@@ -131,8 +138,8 @@ const SupplementAdvisor: React.FC<Props> = ({ profile, userId, existingPlan }) =
                 </div>
             </div>
             
-            <div className={`absolute top-0 right-0 w-48 h-48 rounded-full blur-[80px] -mr-16 -mt-16 pointer-events-none transition-opacity duration-700 opacity-20 ${accentColor}`}></div>
-        </div>
+            <div className={`absolute top-0 right-0 w-48 h-48 rounded-full blur-[40px] -mr-16 -mt-16 pointer-events-none transition-opacity duration-700 opacity-20 transform-gpu ${accentColor}`}></div>
+        </motion.div>
     );
   };
 
@@ -146,7 +153,7 @@ const SupplementAdvisor: React.FC<Props> = ({ profile, userId, existingPlan }) =
         <button 
           onClick={generateStack}
           disabled={loading}
-          className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-primary shadow-xl hover:bg-white/10 active:scale-90 transition-all"
+          className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-primary shadow-xl hover:bg-white/10 active:scale-90 transition-all shine-effect"
         >
           <i className={`fas ${loading ? 'fa-spinner fa-spin' : 'fa-dna'} text-xl`}></i>
         </button>

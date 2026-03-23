@@ -6,6 +6,7 @@ import BodyFatAnalyzer from './BodyFatAnalyzer';
 import ComparisonSlider from './ComparisonSlider';
 import { generateWorkoutSplit } from '../services/geminiService';
 import { calculatePlan } from './Calculator';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
   logs: ProgressEntry[];
@@ -244,13 +245,13 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
 
   return (
     <div className="p-4 space-y-6 pb-32">
-      <div className="bg-secondary p-6 rounded-2xl border border-gray-700">
+      <div className="glass-premium p-6 rounded-[24px] border border-white/10">
         <h1 className="text-2xl font-bold text-primary mb-2">Log Monitor</h1>
         <p className="text-gray-400 text-sm">Track your progress. Significant weight changes will automatically update your profile and stats.</p>
       </div>
 
       {/* Input Section */}
-      <div className="bg-secondary p-0 rounded-2xl border border-gray-700 relative overflow-hidden">
+      <div className="glass-premium p-0 rounded-[24px] border border-white/10 relative overflow-hidden">
         
         {/* TABS */}
         <div className="flex border-b border-gray-700 bg-dark/30">
@@ -274,10 +275,23 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
             </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 relative min-h-[300px]">
+            <AnimatePresence mode="wait">
+            <motion.div
+                key={logMode}
+                initial={{ opacity: 0, y: 15, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -15, scale: 0.98 }}
+                transition={{ 
+                    type: "spring", 
+                    stiffness: 300, 
+                    damping: 30, 
+                    mass: 0.8 
+                }}
+            >
             {logMode === 'quick' && (
                  /* --- QUICK LOG MODE --- */
-                 <div className="animate-fade-in">
+                 <div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
                             <label className="block text-xs text-gray-500 mb-1">Current Weight (kg)</label>
@@ -362,7 +376,7 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
             
             {logMode === 'scan' && (
                 /* --- AI SCAN MODE --- */
-                <div className="animate-fade-in flex flex-col items-center justify-center space-y-4">
+                <div className="flex flex-col items-center justify-center space-y-4">
                     {!photoFile ? (
                         <div className="text-center space-y-4 py-4 w-full">
                              <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto border border-primary/20 shadow-[0_0_15px_rgba(249,115,22,0.3)]">
@@ -427,7 +441,7 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
 
             {logMode === 'compare' && (
                 /* --- COMPARISON MODE --- */
-                <div className="animate-fade-in space-y-6">
+                <div className="space-y-6">
                     {logsWithPhotos.length < 2 ? (
                         <div className="text-center py-8 text-gray-400">
                             <i className="fas fa-images text-4xl mb-3 opacity-50"></i>
@@ -478,7 +492,7 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
                 <button 
                     onClick={handleLog}
                     disabled={loading || regenerating}
-                    className="w-full mt-4 bg-white text-black hover:bg-gray-200 font-bold py-4 rounded-xl transition-colors disabled:opacity-50 shadow-lg flex items-center justify-center gap-2"
+                    className="w-full mt-4 bg-white text-black hover:bg-gray-200 font-bold py-4 rounded-full transition-colors disabled:opacity-50 shadow-lg flex items-center justify-center gap-2 shine-effect"
                 >
                     {loading || regenerating ? (
                         <>
@@ -490,6 +504,8 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
                     )}
                 </button>
             )}
+            </motion.div>
+            </AnimatePresence>
         </div>
       </div>
 
@@ -523,7 +539,7 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
                 }
 
                 return (
-                  <div key={log.id} className="bg-secondary p-4 rounded-xl border border-gray-700 flex justify-between items-start">
+                  <div key={log.id} className="glass-premium p-4 rounded-[24px] border border-white/10 flex justify-between items-start">
                     <div className="flex-1">
                       <div className="text-gray-400 text-xs mb-1 flex items-center gap-2">
                           {log.date}

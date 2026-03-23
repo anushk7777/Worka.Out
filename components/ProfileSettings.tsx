@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, Goal, ActivityLevel } from '../types';
 import { supabase } from '../services/supabaseClient';
 import { calculatePlan } from './Calculator';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
   profile: UserProfile;
@@ -144,11 +145,17 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
   };
 
   return (
-    <div className="p-4 pb-32 space-y-8 animate-fade-in relative">
+    <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -20 }}
+        transition={{ duration: 0.3 }}
+        className="p-4 pb-32 space-y-8 relative"
+    >
       
       {/* RISK WARNING MODAL */}
       {showRiskModal && (
-          <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-6 backdrop-blur-xl animate-fade-in">
+          <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-6 backdrop-blur-sm animate-fade-in transform-gpu">
               <div className="bg-red-950/30 border border-red-500/50 rounded-[40px] p-8 w-full max-w-sm shadow-[0_0_60px_rgba(220,38,38,0.3)] animate-shake relative">
                   <div className="w-16 h-16 rounded-full bg-red-500/20 border border-red-500 flex items-center justify-center mx-auto mb-6">
                       <i className="fas fa-biohazard text-3xl text-red-500"></i>
@@ -170,7 +177,7 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
                       </button>
                       <button 
                         onClick={handleSaveProfile}
-                        className="py-4 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-red-600/20"
+                        className="py-4 rounded-full bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-red-600/20 shine-effect"
                       >
                           I Confirm
                       </button>
@@ -192,7 +199,7 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
 
       {/* Hero Stats Card */}
       <div className="relative rounded-3xl p-6 overflow-hidden border border-white/10 group glass-card">
-         <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-[60px] group-hover:bg-primary/30 transition-all duration-700"></div>
+         <div className="absolute top-0 right-0 w-32 h-32 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/20 to-transparent rounded-full group-hover:from-primary/30 transition-all duration-700 transform-gpu"></div>
          
          <div className="relative z-10 flex items-center gap-4">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-gray-800 to-gray-700 flex items-center justify-center shadow-lg border border-white/10 text-2xl">
@@ -235,7 +242,7 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
                       value={formData.medical_conditions}
                       onChange={(e) => handleChange('medical_conditions', e.target.value)}
                       placeholder="E.g. Diabetes Type 2, Hypertensive, Peanut Allergy, Knee Injury..."
-                      className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm text-white focus:border-red-400/50 outline-none h-24 placeholder-gray-600 font-medium resize-none shadow-inner" 
+                      className="w-full bg-black/40 border border-white/10 rounded-[24px] p-4 text-sm text-white focus:border-red-400/50 outline-none h-24 placeholder-gray-600 font-medium resize-none shadow-inner" 
                   />
                   <div className="absolute bottom-3 right-3 text-[9px] text-gray-600 uppercase font-black tracking-wider pointer-events-none">
                       AI Safety Filter Active
@@ -248,7 +255,7 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
               {/* GOAL SLIDER */}
               <div>
                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 block">Objective</label>
-                  <div className="relative bg-black/40 backdrop-blur-md rounded-2xl p-1.5 flex justify-between items-center border border-white/5 h-14 select-none">
+                  <div className="relative bg-black/40 backdrop-blur-sm rounded-[24px] p-1.5 flex justify-between items-center border border-white/5 h-14 select-none">
                       <div 
                         className="absolute top-1.5 bottom-1.5 bg-gradient-to-r from-primary to-yellow-500 rounded-xl shadow-lg shadow-primary/20 transition-all duration-500 ease-spring gpu"
                         style={{ transform: `translateX(${currentGoalIndex * 100}%)`, width: `${100 / goals.length}%` }}
@@ -299,7 +306,7 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
                   <i className="fas fa-utensils text-green-400"></i> Diet Preference
               </label>
               
-              <div className="relative bg-black/40 backdrop-blur-md rounded-2xl p-1.5 flex justify-between items-center border border-white/5 h-16 select-none">
+              <div className="relative bg-black/40 backdrop-blur-sm rounded-[24px] p-1.5 flex justify-between items-center border border-white/5 h-16 select-none">
                   <div 
                     className={`absolute top-1.5 bottom-1.5 rounded-xl shadow-lg transition-all duration-500 ease-spring gpu ${
                         formData.dietary_preference === 'veg' ? 'bg-green-500 shadow-green-500/20' : 
@@ -359,7 +366,7 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
               <button 
                   onClick={handlePreSave}
                   disabled={loading}
-                  className="w-full bg-white text-black font-black py-4 rounded-2xl shadow-2xl shadow-white/10 hover:bg-gray-200 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 text-sm uppercase tracking-wider relative overflow-hidden"
+                  className="w-full bg-white text-black font-black py-4 rounded-full shadow-2xl shadow-white/10 hover:bg-gray-200 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 text-sm uppercase tracking-wider relative overflow-hidden shine-effect"
               >
                   {loading ? (
                        <i className="fas fa-circle-notch fa-spin"></i>
@@ -381,7 +388,7 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut 
               </div>
           )}
       </div>
-    </div>
+    </motion.div>
   );
 };
 

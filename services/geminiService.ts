@@ -33,26 +33,35 @@ const cleanJson = (text: string): string => {
     if (!text) return "{}";
     try {
         let cleaned = text.trim();
-        // Remove markdown formatting
-        cleaned = cleaned.replace(/^```json/gm, '').replace(/^```/gm, '').trim();
+        // Remove markdown formatting (```json ... ```)
+        cleaned = cleaned.replace(/```json/gi, '').replace(/```/g, '').trim();
         
-        // Find the first '{' or '['
+        // Locate JSON array or object
         const firstBrace = cleaned.indexOf('{');
         const firstBracket = cleaned.indexOf('[');
         
-        if (firstBrace === -1 && firstBracket === -1) return "{}";
-        
+        // Determine start index
         let startIdx = 0;
-        let endIdx = cleaned.length;
-        
         if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
             startIdx = firstBrace;
-            endIdx = cleaned.lastIndexOf('}') + 1;
         } else if (firstBracket !== -1) {
             startIdx = firstBracket;
-            endIdx = cleaned.lastIndexOf(']') + 1;
+        } else {
+            // No JSON structure found
+            return "{}";
         }
-        
+
+        // Determine end index
+        let endIdx = cleaned.length;
+        const lastBrace = cleaned.lastIndexOf('}');
+        const lastBracket = cleaned.lastIndexOf(']');
+
+        if (lastBrace !== -1 && (lastBracket === -1 || lastBrace > lastBracket)) {
+            endIdx = lastBrace + 1;
+        } else if (lastBracket !== -1) {
+            endIdx = lastBracket + 1;
+        }
+
         return cleaned.substring(startIdx, endIdx);
     } catch (e) {
         console.error("JSON Clean Error:", e);
@@ -80,7 +89,7 @@ export const generateTrainerResponse = async (
     ];
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3.1-pro-preview',
       contents: contents,
       config: { 
         tools: [{ googleSearch: {} }], 
@@ -140,7 +149,7 @@ export const analyzeBodyComposition = async (
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview", 
+      model: "gemini-3.1-pro-preview", 
       contents: { parts: parts },
       config: { 
         thinkingConfig: { thinkingBudget: 8000 },
@@ -168,7 +177,7 @@ export const generateWorkoutSplit = async (profile: UserProfile): Promise<Workou
     try {
         const ai = getAIClient();
         const response = await ai.models.generateContent({
-            model: "gemini-3-pro-preview",
+            model: "gemini-3.1-pro-preview",
             contents: prompt,
             config: { 
                 thinkingConfig: { thinkingBudget: 8000 },
@@ -254,7 +263,7 @@ export const generateDailyMealPlan = async (
             const ai = getAIClient();
             console.log("Generating plan for:", dateStr);
             const response = await ai.models.generateContent({
-                model: "gemini-3-pro-preview", 
+                model: "gemini-3.1-pro-preview", 
                 contents: prompt,
                 config: { 
                     maxOutputTokens: 32768, // Explicitly set max output tokens to allow room after thinking
@@ -320,7 +329,7 @@ export const handleDietDeviation = async (currentPlan: DailyMealPlanDB, targetMa
     try {
         const ai = getAIClient();
         const response = await ai.models.generateContent({
-            model: "gemini-3-pro-preview", 
+            model: "gemini-3.1-pro-preview", 
             contents: prompt,
             config: { 
                 thinkingConfig: { thinkingBudget: 4000 }, 
@@ -337,7 +346,7 @@ export const addFoodItem = async (currentPlan: DailyMealPlanDB, userDescription:
     try {
         const ai = getAIClient();
         const response = await ai.models.generateContent({
-            model: "gemini-3-pro-preview", 
+            model: "gemini-3.1-pro-preview", 
             contents: prompt,
             config: { 
                 thinkingConfig: { thinkingBudget: 4000 }, 
@@ -367,7 +376,7 @@ export const generateSupplementStack = async (profile: UserProfile): Promise<Sup
     try {
         const ai = getAIClient();
         const response = await ai.models.generateContent({
-            model: "gemini-3-pro-preview",
+            model: "gemini-3.1-pro-preview",
             contents: prompt,
             config: { 
                 thinkingConfig: { thinkingBudget: 8000 },

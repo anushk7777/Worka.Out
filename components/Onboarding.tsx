@@ -130,7 +130,7 @@ const Onboarding: React.FC<Props> = ({ onComplete, onSignOut }) => {
         <i className="fas fa-power-off"></i> Exit Setup
       </button>
 
-      <div className="bg-secondary p-8 rounded-3xl shadow-2xl w-full max-w-md border border-white/10 relative z-10 animate-scale-in">
+      <div className="glass-premium p-8 rounded-[40px] shadow-[0_40px_100px_rgba(0,0,0,0.8)] w-full max-w-md border border-white/10 relative z-10 animate-scale-in">
         <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-black text-primary uppercase tracking-tighter">
               {step === 1 ? "Basics" : step === 2 ? "Stats" : step === 3 ? "Diet" : step === 4 ? "Goals" : "Scan"}
@@ -161,7 +161,7 @@ const Onboarding: React.FC<Props> = ({ onComplete, onSignOut }) => {
                   <button
                     key={g}
                     onClick={() => handleChange('gender', g)}
-                    className={`flex-1 p-4 rounded-2xl border font-bold transition-all ${formData.gender === g ? 'bg-primary border-primary text-black shadow-lg shadow-primary/20' : 'bg-dark border-white/10 text-gray-400 hover:border-white/20'}`}
+                    className={`flex-1 p-4 rounded-[24px] border font-bold transition-all ${formData.gender === g ? 'bg-primary border-primary text-black shadow-lg shadow-primary/20' : 'bg-dark border-white/10 text-gray-400 hover:border-white/20'}`}
                   >
                     {g}
                   </button>
@@ -205,7 +205,7 @@ const Onboarding: React.FC<Props> = ({ onComplete, onSignOut }) => {
                     />
                 </div>
             </div>
-            <div className="p-4 bg-primary/5 border border-primary/20 rounded-2xl">
+            <div className="p-4 bg-primary/5 border border-primary/20 rounded-[24px]">
                 <p className="text-[10px] text-primary/80 font-medium leading-relaxed italic">
                     Note: Be accurate. The Master AI uses these metrics to calculate your BMR and hormone balance baseline.
                 </p>
@@ -221,7 +221,7 @@ const Onboarding: React.FC<Props> = ({ onComplete, onSignOut }) => {
                     <button
                         key={type}
                         onClick={() => handleChange('dietary_preference', type)}
-                        className={`p-4 rounded-2xl border transition-all flex items-center justify-between group ${
+                        className={`p-4 rounded-[24px] border transition-all flex items-center justify-between group ${
                             formData.dietary_preference === type 
                             ? 'bg-primary text-black border-primary shadow-lg' 
                             : 'bg-dark border-white/10 text-gray-400 hover:border-white/20'
@@ -271,15 +271,15 @@ const Onboarding: React.FC<Props> = ({ onComplete, onSignOut }) => {
           <div className="space-y-6 text-center animate-fade-in">
             <div className="bg-primary/10 p-6 rounded-3xl border border-primary/20">
               <i className="fas fa-id-card-alt text-5xl text-primary mb-4"></i>
-              <h3 className="text-xl font-black text-white">Visual Baseline</h3>
+              <h3 className="text-xl font-black text-white">Visual Baseline (Optional)</h3>
               <p className="text-xs text-gray-400 mt-2 leading-relaxed">
-                The Master AI performs a technical biomechanics scan to calculate your body fat percentage with 99% accuracy compared to DEXA.
+                The Master AI performs a technical biomechanics scan to calculate your body fat percentage with 99% accuracy compared to DEXA. You can skip this and add it later.
               </p>
             </div>
 
             <button 
                 onClick={() => setShowAnalyzer(true)}
-                className={`w-full bg-dark hover:bg-white/5 text-primary border-2 border-dashed border-primary font-black py-5 rounded-2xl transition-all flex items-center justify-center gap-3 ${scanFile ? 'bg-green-500/10 border-green-500 text-green-500' : ''}`}
+                className={`w-full bg-dark hover:bg-white/5 text-primary border-2 border-dashed border-primary font-black py-5 rounded-[24px] transition-all flex items-center justify-center gap-3 ${scanFile ? 'bg-green-500/10 border-green-500 text-green-500' : ''}`}
             >
                 {scanFile ? (
                    <><i className="fas fa-check-circle"></i> Profile Data Locked ({formData.bodyFat}%)</>
@@ -294,7 +294,7 @@ const Onboarding: React.FC<Props> = ({ onComplete, onSignOut }) => {
             {step > 1 && (
                 <button 
                     onClick={() => setStep(step - 1)}
-                    className="flex-1 bg-white/5 hover:bg-white/10 text-gray-400 font-bold py-4 rounded-2xl transition-all"
+                    className="flex-1 bg-white/5 hover:bg-white/10 text-gray-400 font-bold py-4 rounded-full transition-all"
                     disabled={loading}
                 >
                     Back
@@ -304,16 +304,16 @@ const Onboarding: React.FC<Props> = ({ onComplete, onSignOut }) => {
             {step === 5 ? (
                 <button 
                   onClick={handleFinalize}
-                  disabled={loading || !formData.bodyFat}
-                  className="flex-[2] bg-gradient-to-r from-primary to-orange-500 text-black font-black py-4 rounded-2xl shadow-xl shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
+                  disabled={loading}
+                  className="flex-[2] bg-gradient-to-r from-primary to-orange-500 text-black font-black py-4 rounded-full shadow-xl shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95 shine-effect"
                 >
-                  {loading ? <i className="fas fa-spinner fa-spin"></i> : "FINALIZE PLAN"}
+                  {loading ? <i className="fas fa-spinner fa-spin"></i> : (scanFile ? "FINALIZE PLAN" : "SKIP & FINALIZE")}
                 </button>
             ) : (
                 <button 
                 onClick={handleNext}
                 disabled={(step === 1 && (!formData.name || !formData.age) || step === 2 && (!formData.weight || !formData.height))}
-                className="flex-[2] bg-white text-black font-black py-4 rounded-2xl shadow-xl shadow-white/5 disabled:opacity-50 transition-all active:scale-95"
+                className="flex-[2] bg-white text-black font-black py-4 rounded-full shadow-xl shadow-white/5 disabled:opacity-50 transition-all active:scale-95 shine-effect"
                 >
                 CONTINUE
                 </button>

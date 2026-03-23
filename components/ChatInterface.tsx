@@ -65,7 +65,7 @@ const ChatInterface: React.FC<Props> = ({ userProfile, progressLogs, onClose }) 
   return (
     <div className="flex flex-col h-full bg-dark pb-0">
       {/* Header */}
-      <div className="bg-secondary p-4 border-b border-gray-700 shadow-md sticky top-0 z-10 flex justify-between items-center">
+      <div className="glass-premium p-4 border-b border-white/10 shadow-md sticky top-0 z-10 flex justify-between items-center">
         <h2 className="text-lg font-bold text-white flex items-center">
           <i className="fas fa-robot mr-2 text-primary"></i> Master Trainer AI
         </h2>
@@ -84,8 +84,8 @@ const ChatInterface: React.FC<Props> = ({ userProfile, progressLogs, onClose }) 
             <div 
               className={`max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed ${
                 msg.role === 'user' 
-                  ? 'bg-primary text-white rounded-tr-none' 
-                  : 'bg-secondary text-gray-200 rounded-tl-none border border-gray-700'
+                  ? 'bg-primary text-dark rounded-tr-none shadow-lg' 
+                  : 'glass-premium text-gray-200 rounded-tl-none border border-white/10'
               }`}
             >
               {msg.text.split('\n').map((line, i) => (
@@ -119,7 +119,7 @@ const ChatInterface: React.FC<Props> = ({ userProfile, progressLogs, onClose }) 
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-secondary p-3 rounded-2xl rounded-tl-none border border-gray-700">
+            <div className="glass-premium p-3 rounded-2xl rounded-tl-none border border-white/10">
               <div className="flex space-x-2">
                 <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
                 <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-75"></div>
@@ -132,7 +132,7 @@ const ChatInterface: React.FC<Props> = ({ userProfile, progressLogs, onClose }) 
       </div>
 
       {/* Input */}
-      <div className="p-4 bg-secondary border-t border-gray-700 sticky bottom-0">
+      <div className="p-4 glass-premium border-t border-white/10 sticky bottom-0">
         <div className="flex gap-2">
           <input
             type="text"
@@ -145,7 +145,7 @@ const ChatInterface: React.FC<Props> = ({ userProfile, progressLogs, onClose }) 
           <button 
             onClick={handleSend}
             disabled={loading}
-            className="bg-primary text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-orange-600 disabled:opacity-50"
+            className="bg-primary text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-orange-600 disabled:opacity-50 shine-effect"
           >
             <i className="fas fa-paper-plane"></i>
           </button>
