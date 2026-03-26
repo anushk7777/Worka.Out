@@ -69,6 +69,16 @@ const cleanJson = (text: string): string => {
     }
 };
 
+const recalculateDailyTotals = (meals: any[]) => {
+    return meals.reduce((acc, meal) => {
+        acc.p = Math.round((acc.p + (meal.macros?.p || 0)) * 10) / 10;
+        acc.c = Math.round((acc.c + (meal.macros?.c || 0)) * 10) / 10;
+        acc.f = Math.round((acc.f + (meal.macros?.f || 0)) * 10) / 10;
+        acc.cal = Math.round((acc.cal + (meal.macros?.cal || 0)));
+        return acc;
+    }, { p: 0, c: 0, f: 0, cal: 0 });
+};
+
 export const generateTrainerResponse = async (
   history: ChatMessage[] = [], 
   userProfile: UserProfile | null,
@@ -229,7 +239,6 @@ export const generateDailyMealPlan = async (
     customCalorieTarget?: number,
     contextNote?: string
 ): Promise<DailyMealPlanDB> => {
-    const foodDB = getFoodDBContext();
     const effectiveCalories = customCalorieTarget || macros.calories;
     const aggressiveness = profile.goal_aggressiveness === 'aggressive' ? "AGGRESSIVE/ACCELERATED (Strict Compliance Required)" : "SUSTAINABLE (Balanced)";
     
@@ -250,8 +259,7 @@ export const generateDailyMealPlan = async (
       Intensity: ${aggressiveness}.
       ${medical}
       ${contextNote ? `Special Context: ${contextNote}` : ''}
-      Use the following database context for calorie/macro values:
-      ${foodDB}
+      Use Google Search to find accurate nutritional data for the foods you include to ensure the macros are realistic.
       Ensure all strings in the JSON response are properly closed and valid JSON syntax is maintained.
     `;
 
@@ -263,6 +271,7 @@ export const generateDailyMealPlan = async (
                 model: "gemini-3.1-pro-preview", 
                 contents: prompt,
                 config: { 
+                    tools: [{ googleSearch: {} }],
                     maxOutputTokens: 32768, // Explicitly set max output tokens to allow room after thinking
                     responseMimeType: "application/json",
                     responseSchema: {
@@ -321,19 +330,15 @@ export const generateDailyMealPlan = async (
 };
 
 export const handleDietDeviation = async (currentPlan: DailyMealPlanDB, targetMacros: MacroPlan, mealIndex: number, userDescription: string): Promise<DailyMealPlanDB> => {
+    const mealToEdit = currentPlan.meals[mealIndex];
     const prompt = `
-      You are a diet assistant. The user wants to edit a specific meal in their daily plan.
-      Current Plan: ${JSON.stringify(currentPlan)}
-      Meal to edit: Index ${mealIndex} (${currentPlan.meals[mealIndex].name})
-      User Instruction: "${userDescription}"
+      Original Meal: ${JSON.stringify({ items: mealToEdit.items, macros: mealToEdit.macros })}
+      User Modification: "${userDescription}"
 
       Task:
-      1. Modify ONLY the meal at index ${mealIndex} according to the user's instruction.
-      2. Recalculate the macros (protein, carbs, fats, calories) for that specific meal based on the new ingredients/quantities.
-      3. Recalculate the daily_totals by summing up the macros of all meals.
-      4. DO NOT change any other meals in the plan. Keep them exactly as they are. Do not rebalance the rest of the day.
-
-      Return the full updated plan in JSON format matching the original structure.
+      1. Modify the meal items based on the user's instruction.
+      2. Recalculate the macros (protein, carbs, fats, calories) for the updated meal. Use Google Search to find accurate nutritional data.
+      3. Return ONLY the updated meal JSON.
     `;
     try {
         const ai = getAIClient();
@@ -341,34 +346,13 @@ export const handleDietDeviation = async (currentPlan: DailyMealPlanDB, targetMa
             model: "gemini-3-flash-preview", 
             contents: prompt,
             config: { 
+                tools: [{ googleSearch: {} }],
                 responseMimeType: "application/json",
                 responseSchema: {
                   type: Type.OBJECT,
                   properties: {
-                    meals: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.OBJECT,
-                        properties: {
-                          name: { type: Type.STRING },
-                          time: { type: Type.STRING },
-                          items: { type: Type.ARRAY, items: { type: Type.STRING } },
-                          macros: {
-                            type: Type.OBJECT,
-                            properties: {
-                              p: { type: Type.NUMBER },
-                              c: { type: Type.NUMBER },
-                              f: { type: Type.NUMBER },
-                              cal: { type: Type.NUMBER }
-                            },
-                            required: ["p", "c", "f", "cal"]
-                          },
-                          isCompleted: { type: Type.BOOLEAN }
-                        },
-                        required: ["name", "time", "items", "macros"]
-                      }
-                    },
-                    daily_totals: {
+                    items: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    macros: {
                       type: Type.OBJECT,
                       properties: {
                         p: { type: Type.NUMBER },
@@ -379,28 +363,33 @@ export const handleDietDeviation = async (currentPlan: DailyMealPlanDB, targetMa
                       required: ["p", "c", "f", "cal"]
                     }
                   },
-                  required: ["meals", "daily_totals"]
+                  required: ["items", "macros"]
                 }
             } 
         });
-        const data = JSON.parse(cleanJson(response.text));
-        return { ...currentPlan, meals: data?.meals || currentPlan.meals, macros: data?.daily_totals || currentPlan.macros };
+        const updatedMealData = JSON.parse(cleanJson(response.text));
+        
+        const updatedMeals = [...currentPlan.meals];
+        updatedMeals[mealIndex] = {
+            ...updatedMeals[mealIndex],
+            items: updatedMealData.items || updatedMeals[mealIndex].items,
+            macros: updatedMealData.macros || updatedMeals[mealIndex].macros
+        };
+        
+        const updatedTotals = recalculateDailyTotals(updatedMeals);
+        
+        return { ...currentPlan, meals: updatedMeals, macros: updatedTotals };
     } catch (e: any) { throw new Error("Deviation update failed."); }
 };
 
 export const addFoodItem = async (currentPlan: DailyMealPlanDB, userDescription: string): Promise<DailyMealPlanDB> => {
     const prompt = `
-      You are a diet assistant. The user wants to add a food item to their daily plan.
-      Current Plan: ${JSON.stringify(currentPlan)}
-      User Instruction: "${userDescription}"
-
+      The user ate: "${userDescription}".
+      
       Task:
-      1. Add the food item described by the user as a new meal or append it to an appropriate existing meal.
-      2. Estimate the macros (protein, carbs, fats, calories) accurately for the new item.
-      3. Recalculate the macros for the affected meal and the daily_totals.
-      4. DO NOT change any other meals in the plan. Keep them exactly as they are.
-
-      Return the full updated plan in JSON format matching the original structure.
+      1. Identify the food items and their quantities.
+      2. Estimate the nutritional macros (protein, carbs, fats, calories) for this consumption. Use Google Search to find accurate nutritional data.
+      3. Return a JSON object representing this as a meal addition.
     `;
     try {
         const ai = getAIClient();
@@ -408,34 +397,15 @@ export const addFoodItem = async (currentPlan: DailyMealPlanDB, userDescription:
             model: "gemini-3-flash-preview", 
             contents: prompt,
             config: { 
+                tools: [{ googleSearch: {} }],
                 responseMimeType: "application/json",
                 responseSchema: {
                   type: Type.OBJECT,
                   properties: {
-                    meals: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.OBJECT,
-                        properties: {
-                          name: { type: Type.STRING },
-                          time: { type: Type.STRING },
-                          items: { type: Type.ARRAY, items: { type: Type.STRING } },
-                          macros: {
-                            type: Type.OBJECT,
-                            properties: {
-                              p: { type: Type.NUMBER },
-                              c: { type: Type.NUMBER },
-                              f: { type: Type.NUMBER },
-                              cal: { type: Type.NUMBER }
-                            },
-                            required: ["p", "c", "f", "cal"]
-                          },
-                          isCompleted: { type: Type.BOOLEAN }
-                        },
-                        required: ["name", "time", "items", "macros"]
-                      }
-                    },
-                    daily_totals: {
+                    name: { type: Type.STRING },
+                    time: { type: Type.STRING },
+                    items: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    macros: {
                       type: Type.OBJECT,
                       properties: {
                         p: { type: Type.NUMBER },
@@ -446,12 +416,21 @@ export const addFoodItem = async (currentPlan: DailyMealPlanDB, userDescription:
                       required: ["p", "c", "f", "cal"]
                     }
                   },
-                  required: ["meals", "daily_totals"]
+                  required: ["name", "time", "items", "macros"]
                 }
             } 
         });
-        const data = JSON.parse(cleanJson(response.text));
-        return { ...currentPlan, meals: data?.meals || currentPlan.meals, macros: data?.daily_totals || currentPlan.macros };
+        const newMeal = JSON.parse(cleanJson(response.text));
+        newMeal.isCompleted = true; // Assume if they are logging it, they ate it.
+        
+        // Provide defaults if AI missed something
+        if (!newMeal.name) newMeal.name = "Snack / Addition";
+        if (!newMeal.time) newMeal.time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        const updatedMeals = [...currentPlan.meals, newMeal];
+        const updatedTotals = recalculateDailyTotals(updatedMeals);
+        
+        return { ...currentPlan, meals: updatedMeals, macros: updatedTotals };
     } catch (e: any) { throw new Error("Food logging failed."); }
 };
 

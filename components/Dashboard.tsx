@@ -9,6 +9,76 @@ import BarcodeScanner from './BarcodeScanner';
 import { FOOD_DATABASE, MOTIVATIONAL_QUOTES } from '../constants'; 
 import CircularSlider from './CircularSlider';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
+
+const QuantitySelector = ({ initialValue, onConfirm, onCancel, min = 0, max = 1000, step = 10, label = "grams" }: { initialValue: string, onConfirm: (val: string) => void, onCancel: () => void, min?: number, max?: number, step?: number, label?: string }) => {
+  const [quantity, setQuantity] = useState(initialValue);
+  
+  return (
+    <div className="space-y-8">
+      <div className="text-center relative">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/10 to-transparent rounded-full pointer-events-none transform-gpu"></div>
+        <CircularSlider 
+          value={Number(quantity) || 0}
+          onChange={(val) => setQuantity(val.toString())}
+          min={min}
+          max={max}
+          step={step}
+          label={label}
+        />
+      </div>
+      <div className="relative group">
+          <input 
+              type="number" 
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-5 text-white font-black text-2xl text-center focus:outline-none focus:border-primary/50 transition-colors"
+              placeholder="0"
+          />
+          <span className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-500 font-black text-sm uppercase tracking-widest pointer-events-none">{label === 'pieces' ? 'pcs' : label === 'milliliters' ? 'ml' : 'g'}</span>
+      </div>
+      <div className="flex gap-4">
+          <button 
+              onClick={onCancel}
+              className="flex-1 py-5 rounded-2xl border border-white/10 text-white font-black text-[11px] uppercase tracking-[0.2em] hover:bg-white/5 transition-colors haptic-press"
+          >
+              Cancel
+          </button>
+          <button 
+              onClick={() => onConfirm(quantity)}
+              disabled={!quantity || Number(quantity) <= 0}
+              className="flex-1 py-5 rounded-2xl bg-primary text-dark font-black text-[11px] uppercase tracking-[0.2em] hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed haptic-press shadow-[0_0_20px_rgba(205,255,0,0.3)]"
+          >
+              Validate Fraction
+          </button>
+      </div>
+    </div>
+  );
+};
+const SplitText = ({ text, className = '' }: { text: string, className?: string }) => {
+  return (
+    <span className={`inline-block ${className}`}>
+      {text.split('').map((char, index) => (
+        <motion.span
+          key={`${char}-${index}`}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: index * 0.05, ease: [0.16, 1, 0.3, 1] }}
+          className="inline-block"
+        >
+          {char === ' ' ? '\u00A0' : char}
+        </motion.span>
+      ))}
+    </span>
+  );
+};
+
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { EffectCards } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/effect-cards';
+
+import { ScrollReveal } from './ScrollReveal';
 
 interface Props {
   userId: string;
@@ -103,20 +173,16 @@ const TypewriterText = ({ text }: { text: string }) => {
   );
 };
 
-const FadeInItem: React.FC<{ children: React.ReactNode, delay?: number }> = ({ children, delay = 0 }) => {
+const ScrollRevealItem: React.FC<{ children: React.ReactNode, delay?: number }> = ({ children, delay = 0 }) => {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-50px" }}
-      transition={{ duration: 0.5, delay: delay / 1000, ease: [0.175, 0.885, 0.32, 1.275] }}
-    >
+    <ScrollReveal delay={delay / 1000} distance={20} duration={0.5}>
       {children}
-    </motion.div>
+    </ScrollReveal>
   );
 };
 
 export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs = [], onSignOut, onNavigate, refreshTrigger, isGeneratingPlan, setIsGeneratingPlan, isGuest }) => {
+  const [listRef] = useAutoAnimate<HTMLDivElement>();
   // 1. Calculate Plan Source of Truth with ULTRA-ELITE ENGINE
   const plan: MacroPlan = useMemo(() => {
     return profile.daily_calories 
@@ -150,6 +216,8 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
   const [editInstruction, setEditInstruction] = useState('');
   const [isEditingMeal, setIsEditingMeal] = useState(false);
   const [editItems, setEditItems] = useState<{originalString: string, qty: number | null, unit: string, name: string, currentQty: number | null, foodItem?: FoodItem}[]>([]);
+
+
 
   useEffect(() => {
     if (editingMeal && todayPlan) {
@@ -556,9 +624,9 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
   
   const handleSelectFood = (item: FoodItem) => { setSelectedFoodItem(item); setInputQuantity(item.base_amount.toString()); };
 
-  const handleConfirmQuantity = async () => {
+  const handleConfirmQuantity = async (qtyStr?: string) => {
       if (!todayPlan || !selectedFoodItem || !todayPlan.meals) return;
-      const qty = parseFloat(inputQuantity);
+      const qty = parseFloat(qtyStr || inputQuantity);
       if (isNaN(qty) || qty <= 0) { 
           triggerVisualHaptic('error', 'add-food');
           alert("Invalid quantity."); 
@@ -783,7 +851,7 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                         {PhaseIcon}
                         {greetingText}
                     </p>
-                    <h1 className="text-4xl font-black text-white tracking-tighter drop-shadow-lg">{profile.name.split(' ')[0]}</h1>
+                    <h1 className="text-4xl font-black text-white tracking-tighter drop-shadow-lg"><SplitText text={profile.name.split(' ')[0]} /></h1>
                 </div>
                 <button onClick={() => onNavigate('profile')} className="w-14 h-14 rounded-[24px] bg-white/[0.1] border border-white/20 flex items-center justify-center transition-all haptic-press hover:bg-white/[0.2] shadow-lg inner-glow">
                     <i className="fas fa-fingerprint text-white text-2xl drop-shadow-md"></i>
@@ -883,7 +951,7 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                 <div className="space-y-6">
                     {/* --- GOAL MISMATCH ALERT --- */}
                 {isPlanMismatch && (
-                    <FadeInItem>
+                    <ScrollRevealItem>
                         <div className="glass-premium bg-yellow-500/5 border-yellow-500/30 p-5 rounded-[32px] flex flex-col sm:flex-row justify-between items-center gap-4 relative overflow-hidden group">
                            <div className="absolute inset-0 bg-yellow-500/5 animate-pulse-slow"></div>
                            <div className="relative z-10 flex items-center gap-4">
@@ -904,11 +972,11 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                                <i className="fas fa-sync-alt"></i> Sync Plan
                            </button>
                         </div>
-                    </FadeInItem>
+                    </ScrollRevealItem>
                 )}
 
                 {(!todayPlan && !isSyncing) ? (
-                    <FadeInItem>
+                    <ScrollRevealItem>
                         <div className="glass-premium p-14 rounded-[48px] text-center border border-white/10 overflow-hidden relative group">
                             <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-blue-500/10 opacity-30 pointer-events-none"></div>
                             <div className="w-28 h-28 bg-white/[0.03] rounded-[32px] flex items-center justify-center mb-10 mx-auto border border-white/10 group-hover:scale-110 group-hover:rotate-6 transition-all duration-1000 inner-glow animate-float">
@@ -929,7 +997,7 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                                 <i className="fas fa-bolt-lightning"></i> Initialize Protocol
                             </button>
                         </div>
-                    </FadeInItem>
+                    </ScrollRevealItem>
                 ) : (
                     <div className={`space-y-5 ${isGeneratingPlan ? 'opacity-40 pointer-events-none grayscale' : ''}`}>
                          {!isPlanMismatch && (
@@ -947,9 +1015,10 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                              </div>
                          )}
 
-                         {(todayPlan?.meals || []).map((meal, idx) => (
-                            <FadeInItem key={idx} delay={idx * 50}>
+                         <div ref={listRef} className="space-y-6">
+                           {(todayPlan?.meals || []).map((meal, idx) => (
                                 <div 
+                                    key={idx}
                                     onClick={() => toggleMealCompletion(idx)}
                                     className={`glass-premium rounded-[40px] overflow-hidden group relative transition-all duration-500 ease-spring haptic-press cursor-pointer border border-white/5 ${meal.isCompleted ? 'border-green-500/30 opacity-60' : 'hover:border-white/20'} ${visualHaptic?.id === `meal-${idx}` && visualHaptic.type === 'success' ? 'animate-pulse-double ring-2 ring-green-400' : ''}`}
                                 >
@@ -998,52 +1067,64 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                                     </div>
                                     {meal.isCompleted && <div className="absolute inset-0 bg-green-500/5 pointer-events-none"></div>}
                                 </div>
-                            </FadeInItem>
                          ))}
                          
-                         <FadeInItem delay={200}>
+                         <ScrollRevealItem delay={200}>
                             <button onClick={() => { setAddFoodModal(true); setAddFoodInput(''); }} className="w-full py-8 rounded-[40px] border-2 border-dashed border-white/10 hover:border-primary/40 text-gray-500 hover:text-white flex items-center justify-center gap-4 group bg-black/30 transition-all haptic-press shine-effect">
                                 <div className="w-10 h-10 rounded-full bg-white/[0.03] flex items-center justify-center group-hover:bg-primary group-hover:text-dark transition-all">
                                     <i className="fas fa-plus-circle text-xl"></i>
                                 </div>
                                 <span className="font-black text-[12px] uppercase tracking-[0.3em]">Add Intake Fragment</span>
                             </button>
-                         </FadeInItem>
+                         </ScrollRevealItem>
                     </div>
-                )}
-            </div>
-        )}
+                </div>
+            )}
+        </div>
+    )}
 
             {activeTab === 'workout' && (
-                <div className="space-y-6">
+                <div className="w-full">
                 {workoutPlan && Array.isArray(workoutPlan.workout) ? (
-                    workoutPlan.workout.map((day, i) => (
-                        <FadeInItem key={i} delay={i * 100}>
-                            <div className="glass-premium rounded-[42px] overflow-hidden border-white/10 hover:border-white/20 transition-all duration-700">
-                                <div className="p-7 bg-white/[0.03] border-b border-white/5 flex justify-between items-center">
-                                    <h3 className="font-black text-white text-2xl tracking-tighter leading-none">{day.day}</h3>
-                                    <span className="text-[10px] bg-primary text-dark px-4 py-1.5 rounded-full font-black uppercase tracking-[0.15em] border border-white/20 shadow-lg">{day.focus}</span>
-                                </div>
-                                <div className="p-7 space-y-6">
-                                    {(day.exercises || []).map((ex, j) => (
-                                        <div key={j} className="flex justify-between items-start gap-6 group">
-                                            <div className="flex-1">
-                                                <p className="text-white font-black text-lg leading-tight group-hover:text-primary transition-colors">{ex.name}</p>
-                                                {ex.notes && <p className="text-[11px] text-gray-500 mt-2 font-medium leading-relaxed bg-white/[0.02] p-2 rounded-lg">{ex.notes}</p>}
-                                            </div>
-                                            <div className="text-right shrink-0">
-                                                <div className="glass-liquid px-4 py-2.5 rounded-[20px] border-white/5 shadow-inner">
-                                                    <span className="text-[12px] font-black font-mono text-gray-400 tabular-nums">
-                                                        {ex.sets} <span className="text-primary/60 mx-1">×</span> {ex.reps}
-                                                    </span>
+                    <Swiper
+                        effect={'cards'}
+                        grabCursor={true}
+                        modules={[EffectCards]}
+                        cardsEffect={{
+                            slideShadows: false,
+                        }}
+                        observer={true}
+                        observeParents={true}
+                        className="w-full max-w-[340px] aspect-[3/4] mx-auto"
+                    >
+                        {workoutPlan.workout.map((day, i) => (
+                            <SwiperSlide key={i} className="h-full rounded-[42px] overflow-hidden bg-[#1A1A24] shadow-2xl border border-white/10 transform-gpu will-change-transform">
+                                <div className="h-full hover:border-white/20 transition-all duration-700 flex flex-col">
+                                    <div className="p-7 bg-white/[0.03] border-b border-white/5 flex justify-between items-center shrink-0">
+                                        <h3 className="font-black text-white text-2xl tracking-tighter leading-none">{day.day}</h3>
+                                        <span className="text-[10px] bg-primary text-dark px-4 py-1.5 rounded-full font-black uppercase tracking-[0.15em] border border-white/20 shadow-lg">{day.focus}</span>
+                                    </div>
+                                    <div className="p-7 space-y-6 overflow-y-auto no-scrollbar flex-1" data-lenis-prevent>
+                                        {(day.exercises || []).map((ex, j) => (
+                                            <div key={j} className="flex justify-between items-start gap-6 group">
+                                                <div className="flex-1">
+                                                    <p className="text-white font-black text-lg leading-tight group-hover:text-primary transition-colors">{ex.name}</p>
+                                                    {ex.notes && <p className="text-[11px] text-gray-500 mt-2 font-medium leading-relaxed bg-white/[0.02] p-2 rounded-lg">{ex.notes}</p>}
+                                                </div>
+                                                <div className="text-right shrink-0">
+                                                    <div className="glass-liquid px-4 py-2.5 rounded-[20px] border-white/5 shadow-inner">
+                                                        <span className="text-[12px] font-black font-mono text-gray-400 tabular-nums">
+                                                            {ex.sets} <span className="text-primary/60 mx-1">×</span> {ex.reps}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        </FadeInItem>
-                    ))
+                            </SwiperSlide>
+                        ))}
+                    </Swiper>
                 ) : (
                     <div className="text-center py-24 glass-premium rounded-[48px] border-white/5 opacity-40">
                          <i className="fas fa-dumbbell text-5xl text-gray-700 mb-6 animate-pulse"></i>
@@ -1056,7 +1137,7 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
             {activeTab === 'overview' && (
                 <div className="space-y-8">
                 {prediction ? (
-                    <FadeInItem>
+                    <ScrollRevealItem>
                         <div className="glass-premium p-10 rounded-[48px] relative overflow-hidden group border-white/15">
                             <div className="absolute top-0 right-0 w-64 h-64 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-accent/15 to-transparent rounded-full pointer-events-none -mr-20 -mt-20 animate-pulse-slow transform-gpu"></div>
                             
@@ -1142,7 +1223,7 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                                 </div>
                             </div>
                         </div>
-                    </FadeInItem>
+                    </ScrollRevealItem>
                 ) : (
                     <div className="text-center py-32 glass-premium rounded-[48px] border-white/5">
                         <div className="relative inline-block mb-8">
@@ -1161,25 +1242,25 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
       {addFoodModal && (
         <div className="fixed inset-0 bg-dark/95 flex items-center justify-center z-[70] p-6 backdrop-blur-sm animate-fade-in transform-gpu">
           <div className="glass-premium w-full max-w-sm rounded-[48px] overflow-hidden shadow-[0_50px_100px_-20px_rgba(0,0,0,0.8)] border border-white/20 flex flex-col max-h-[85vh] inner-glow animate-scale-in">
-            <div className="p-10 flex-1 overflow-y-auto no-scrollbar">
+            <div className="p-10 flex-1 overflow-y-auto no-scrollbar" data-lenis-prevent>
                 <div className="flex justify-between items-center mb-10">
                     <h2 className="text-2xl font-black text-white tracking-tighter">{selectedFoodItem ? 'Quantify' : 'Injection Point'}</h2>
                     <button onClick={() => { setAddFoodModal(false); setAddFoodInput(''); setSelectedFoodItem(null); }} className="w-12 h-12 rounded-full bg-white/[0.05] border border-white/10 flex items-center justify-center text-gray-400 haptic-press"><i className="fas fa-xmark text-lg"></i></button>
                 </div>
                 {selectedFoodItem ? (
                     <div className="space-y-12 animate-slide-up">
-                        <div className="text-center relative">
-                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/10 to-transparent rounded-full pointer-events-none transform-gpu"></div>
-                          <CircularSlider 
-                            value={Number(inputQuantity) || 0}
-                            onChange={(val) => setInputQuantity(val.toString())}
+                        <QuantitySelector 
+                            initialValue={inputQuantity}
+                            onConfirm={(val) => {
+                                setInputQuantity(val);
+                                handleConfirmQuantity(val);
+                            }}
+                            onCancel={() => { setAddFoodModal(false); setAddFoodInput(''); setSelectedFoodItem(null); }}
                             min={0}
                             max={selectedFoodItem.type === 'unit' ? 10 : 1000}
                             step={selectedFoodItem.type === 'unit' ? 0.5 : 10}
                             label={selectedFoodItem.type === 'unit' ? 'pieces' : selectedFoodItem.type === 'liquid' ? 'milliliters' : 'grams'}
-                          />
-                        </div>
-                        <button onClick={handleConfirmQuantity} className="w-full bg-white text-dark font-black py-6 rounded-full tracking-[0.3em] uppercase text-[12px] shadow-2xl haptic-press transition-transform shine-effect">Validate Fraction</button>
+                        />
                     </div>
                 ) : (
                     <div className="space-y-8 animate-fade-in">

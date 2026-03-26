@@ -8,6 +8,7 @@ import WorkoutHologram from './WorkoutHologram';
 import { generateWorkoutSplit } from '../services/geminiService';
 import { calculatePlan } from './Calculator';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAutoAnimate } from '@formkit/auto-animate/react';
 
 interface Props {
   logs: ProgressEntry[];
@@ -20,6 +21,7 @@ interface Props {
 }
 
 const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScanner, onScannerLaunched, workoutPlan, isGuest }) => {
+  const [listRef] = useAutoAnimate<HTMLDivElement>();
   const [weight, setWeight] = useState(profile.weight);
   const [bodyFat, setBodyFat] = useState('');
   const [notes, setNotes] = useState('');
@@ -553,7 +555,7 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
 
       {/* History List - Only show if not in compare mode */}
       {logMode !== 'compare' && (
-          <div className="space-y-4 pt-4">
+          <div className="space-y-4 pt-4" ref={listRef}>
             <h3 className="text-white font-bold ml-1 text-sm uppercase tracking-wider opacity-70">Recent History</h3>
             {sortedLogs.length === 0 ? (
               <div className="text-gray-500 text-center py-8">No logs yet. Start tracking!</div>

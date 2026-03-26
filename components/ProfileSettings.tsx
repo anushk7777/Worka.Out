@@ -148,11 +148,7 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
   };
 
   return (
-    <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -20 }}
-        transition={{ duration: 0.3 }}
+    <div 
         className="p-4 pb-32 space-y-8 relative"
     >
       
@@ -391,7 +387,7 @@ const ProfileSettings: React.FC<Props> = ({ profile, onUpdateProfile, onSignOut,
               </div>
           )}
       </div>
-    </motion.div>
+    </div>
   );
 };
 

@@ -56,7 +56,7 @@ const Library: React.FC = () => {
       </div>
       
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto pr-1">
+      <div className="flex-1 overflow-y-auto pr-1" data-lenis-prevent>
         {activeTab === 'recipes' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredRecipes.map((recipe) => (

@@ -11,6 +11,8 @@ import ChatInterface from './components/ChatInterface';
 import ProfileSettings from './components/ProfileSettings'; 
 import { UserProfile, ProgressEntry, ActivityLevel, Goal, Gender, PersonalizedPlan } from './types';
 import { motion, AnimatePresence } from 'framer-motion';
+import Lenis from 'lenis';
+import { useDrag } from '@use-gesture/react';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -32,11 +34,26 @@ const App: React.FC = () => {
   // Chat State
   const [showChat, setShowChat] = useState(false);
 
-  // Gesture State
-  const touchStart = useRef<{x: number, y: number} | null>(null);
-
   // Contextual Background State
   const [timePhase, setTimePhase] = useState<'morning' | 'noon' | 'evening' | 'night'>('night');
+
+  useEffect(() => {
+    // Initialize Lenis for smooth scrolling
+    const lenis = new Lenis({
+      autoRaf: true,
+      duration: 1.2,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      orientation: 'vertical',
+      gestureOrientation: 'vertical',
+      smoothWheel: true,
+      wheelMultiplier: 1,
+      touchMultiplier: 2,
+    });
+
+    return () => {
+      lenis.destroy();
+    };
+  }, []);
 
   useEffect(() => {
     // Determine Time Phase for Ambient Background
@@ -158,32 +175,30 @@ const App: React.FC = () => {
   };
 
   // --- Gesture Navigation Logic ---
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStart.current) return;
-    const touchEnd = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+  const bindDrag = useDrag(({ swipe: [swipeX], tap, event }) => {
+    if (tap) return;
     
-    const xDiff = touchStart.current.x - touchEnd.x;
-    const yDiff = touchStart.current.y - touchEnd.y;
-
-    if (Math.abs(xDiff) > Math.abs(yDiff) && Math.abs(xDiff) > 50) {
-        const isLeftEdge = touchStart.current.x < 40;
-        const isRightEdge = touchStart.current.x > window.innerWidth - 40;
-        const tabs: Array<typeof currentTab> = ['dashboard', 'supplements', 'progress', 'profile'];
-        const idx = tabs.indexOf(currentTab);
-
-        if (xDiff > 0 && isRightEdge) {
-            if (idx < tabs.length - 1) setCurrentTab(tabs[idx + 1]);
-        }
-        else if (xDiff < 0 && isLeftEdge) {
-            if (idx > 0) setCurrentTab(tabs[idx - 1]);
-        }
+    // Ignore swipes on elements that need their own horizontal scrolling/swiping
+    const target = event.target as HTMLElement;
+    if (target.closest('.swiper') || target.closest('canvas') || target.closest('[data-no-swipe]')) {
+      return;
     }
-    touchStart.current = null;
-  };
+
+    const tabs: Array<typeof currentTab> = ['dashboard', 'supplements', 'progress', 'profile'];
+    const idx = tabs.indexOf(currentTab);
+
+    if (swipeX === -1) {
+        // Swiped left -> go to next tab
+        if (idx < tabs.length - 1) setCurrentTab(tabs[idx + 1]);
+    } else if (swipeX === 1) {
+        // Swiped right -> go to previous tab
+        if (idx > 0) setCurrentTab(tabs[idx - 1]);
+    }
+  }, { axis: 'x', filterTaps: true, swipe: { distance: 50, velocity: 0.3 } });
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentTab]);
 
   const getAmbientColors = () => {
       switch(timePhase) {
@@ -212,7 +227,7 @@ const App: React.FC = () => {
   if (!session && !isGuest) return <Auth onGuestLogin={handleGuestLogin} />;
   
   if (!profile) return (
-      <div className="fixed inset-0 bg-dark overflow-y-auto overflow-x-hidden">
+      <div className="fixed inset-0 bg-dark overflow-y-auto overflow-x-hidden" data-lenis-prevent>
         <Onboarding 
             isGuest={isGuest}
             onComplete={(p, wp) => { 
@@ -229,9 +244,8 @@ const App: React.FC = () => {
 
   return (
     <div 
-        className="flex flex-col h-[100dvh] bg-dark text-gray-200 font-sans overflow-hidden relative selection:bg-primary/30 bg-noise"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
+        {...bindDrag()}
+        className="flex flex-col min-h-[100dvh] bg-dark text-gray-200 font-sans relative selection:bg-primary/30 bg-noise touch-pan-y"
     >
       
       {/* Cinematic Dynamic Background - Optimized for 60fps */}
@@ -254,40 +268,78 @@ const App: React.FC = () => {
       )}
 
       {/* Content Area with Safe Area Padding */}
-      <main className="flex-1 overflow-y-auto no-scrollbar scroll-smooth pb-[100px] pt-[var(--sat)] relative z-10 w-full max-w-lg mx-auto md:max-w-xl lg:max-w-2xl xl:max-w-4xl">
-        <div className={`transition-all duration-300 ${currentTab === 'dashboard' ? 'opacity-100 translate-y-0 scale-100 relative z-10' : 'opacity-0 translate-y-4 scale-95 absolute inset-0 pointer-events-none z-0 overflow-hidden'}`}>
-           <Dashboard 
-              profile={profile} 
-              userId={userId} 
-              workoutPlan={workoutPlan} 
-              logs={progressLogs} 
-              onSignOut={handleSignOut} 
-              onNavigate={setCurrentTab} 
-              refreshTrigger={planVersion}
-              isGeneratingPlan={isGeneratingPlan}
-              setIsGeneratingPlan={setIsGeneratingPlan}
-           />
-        </div>
-        <div className={`transition-all duration-300 ${currentTab === 'supplements' ? 'opacity-100 translate-y-0 scale-100 relative z-10' : 'opacity-0 translate-y-4 scale-95 absolute inset-0 pointer-events-none z-0 overflow-hidden'}`}>
-           <SupplementAdvisor 
-              profile={profile}
-              userId={userId}
-              existingPlan={workoutPlan}
-              isGuest={isGuest}
-           />
-        </div>
-        <div className={`transition-all duration-300 ${currentTab === 'progress' ? 'opacity-100 translate-y-0 scale-100 relative z-10' : 'opacity-0 translate-y-4 scale-95 absolute inset-0 pointer-events-none z-0 overflow-hidden'}`}>
-           <ProgressTracker logs={progressLogs} onAddLog={handleAddLog} profile={profile} launchScanner={autoLaunchScanner} onScannerLaunched={() => setAutoLaunchScanner(false)} workoutPlan={workoutPlan} isGuest={isGuest} />
-        </div>
-        <div className={`transition-all duration-300 ${currentTab === 'profile' ? 'opacity-100 translate-y-0 scale-100 relative z-10' : 'opacity-0 translate-y-4 scale-95 absolute inset-0 pointer-events-none z-0 overflow-hidden'}`}>
-          <ProfileSettings 
-              profile={profile} 
-              onUpdateProfile={handleUpdateProfile} 
-              onSignOut={handleSignOut}
-              onPlanRegenerated={handlePlanRegenerated}
-              isGuest={isGuest}
-          />
-        </div>
+      <main className="flex-1 pb-[100px] pt-[var(--sat)] relative z-10 w-full max-w-lg mx-auto md:max-w-xl lg:max-w-2xl xl:max-w-4xl">
+        <AnimatePresence mode="wait">
+          {currentTab === 'dashboard' && (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.98 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              className="relative z-10"
+            >
+              <Dashboard 
+                  profile={profile} 
+                  userId={userId} 
+                  workoutPlan={workoutPlan} 
+                  logs={progressLogs} 
+                  onSignOut={handleSignOut} 
+                  onNavigate={setCurrentTab} 
+                  refreshTrigger={planVersion}
+                  isGeneratingPlan={isGeneratingPlan}
+                  setIsGeneratingPlan={setIsGeneratingPlan}
+              />
+            </motion.div>
+          )}
+          {currentTab === 'supplements' && (
+            <motion.div
+              key="supplements"
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.98 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              className="relative z-10"
+            >
+              <SupplementAdvisor 
+                  profile={profile}
+                  userId={userId}
+                  existingPlan={workoutPlan}
+                  isGuest={isGuest}
+              />
+            </motion.div>
+          )}
+          {currentTab === 'progress' && (
+            <motion.div
+              key="progress"
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.98 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              className="relative z-10"
+            >
+              <ProgressTracker logs={progressLogs} onAddLog={handleAddLog} profile={profile} launchScanner={autoLaunchScanner} onScannerLaunched={() => setAutoLaunchScanner(false)} workoutPlan={workoutPlan} isGuest={isGuest} />
+            </motion.div>
+          )}
+          {currentTab === 'profile' && (
+            <motion.div
+              key="profile"
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.98 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              className="relative z-10"
+            >
+              <ProfileSettings 
+                  profile={profile} 
+                  onUpdateProfile={handleUpdateProfile} 
+                  onSignOut={handleSignOut}
+                  onPlanRegenerated={handlePlanRegenerated}
+                  isGuest={isGuest}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
       {/* Floating Chat Button */}

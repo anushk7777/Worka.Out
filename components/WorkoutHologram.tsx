@@ -46,6 +46,37 @@ const BUTTONS = [
   {key:'core',label:'CORE'},{key:'full',label:'FULL'},
 ];
 
+const MUSCLE_INFO: Record<string, { macros: string, exercises: string[] }> = {
+  chest: {
+    macros: "High Protein (35%), Moderate Carbs (45%), Low Fat (20%) - Focus on recovery.",
+    exercises: ["Bench Press", "Incline Dumbbell Press", "Chest Flyes", "Push-ups"]
+  },
+  back: {
+    macros: "High Protein (40%), Moderate Carbs (40%), Low Fat (20%) - Fuel for heavy pulls.",
+    exercises: ["Deadlifts", "Pull-ups", "Barbell Rows", "Lat Pulldowns"]
+  },
+  legs: {
+    macros: "High Carbs (50%), Moderate Protein (30%), Moderate Fat (20%) - High energy demand.",
+    exercises: ["Squats", "Leg Press", "Romanian Deadlifts", "Calf Raises"]
+  },
+  shoulders: {
+    macros: "Moderate Protein (35%), Moderate Carbs (40%), Moderate Fat (25%)",
+    exercises: ["Overhead Press", "Lateral Raises", "Front Raises", "Face Pulls"]
+  },
+  arms: {
+    macros: "Moderate Protein (35%), Moderate Carbs (45%), Low Fat (20%)",
+    exercises: ["Bicep Curls", "Tricep Extensions", "Hammer Curls", "Skull Crushers"]
+  },
+  core: {
+    macros: "Moderate Protein (30%), Low Carbs (30%), Moderate Fat (40%) - Lean maintenance.",
+    exercises: ["Planks", "Crunches", "Leg Raises", "Russian Twists"]
+  },
+  full: {
+    macros: "Balanced: 30% Protein, 40% Carbs, 30% Fat - Overall recovery and energy.",
+    exercises: ["Burpees", "Kettlebell Swings", "Thrusters", "Clean and Press"]
+  }
+};
+
 function getMuscles(focus: string): string[] {
   if (!focus) return [];
   const lower = focus.toLowerCase().trim();
@@ -309,6 +340,61 @@ const WorkoutHologram: React.FC<Props> = ({ workoutPlan }) => {
     canvas.addEventListener('mousedown',onMD); window.addEventListener('mouseup',onMU); window.addEventListener('mousemove',onMM);
     canvas.addEventListener('touchstart',onTD); canvas.addEventListener('touchend',onTE); canvas.addEventListener('touchmove',onTM);
 
+    // Raycaster for clicking
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let clickStartX = 0;
+    let clickStartY = 0;
+
+    const onPointerDown = (e: MouseEvent | TouchEvent) => {
+      if ('touches' in e) {
+        clickStartX = e.touches[0].clientX;
+        clickStartY = e.touches[0].clientY;
+      } else {
+        clickStartX = e.clientX;
+        clickStartY = e.clientY;
+      }
+    };
+
+    const onClick = (e: MouseEvent | TouchEvent) => {
+      let clientX, clientY;
+      if ('changedTouches' in e) {
+        clientX = e.changedTouches[0].clientX;
+        clientY = e.changedTouches[0].clientY;
+      } else {
+        clientX = (e as MouseEvent).clientX;
+        clientY = (e as MouseEvent).clientY;
+      }
+
+      // If dragged too far, don't count as click
+      if (Math.abs(clientX - clickStartX) > 10 || Math.abs(clientY - clickStartY) > 10) return;
+
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const meshes = allParts.flatMap(g => g.children);
+      const intersects = raycaster.intersectObjects(meshes);
+
+      if (intersects.length > 0) {
+        const object = intersects[0].object;
+        const group = object.parent;
+        if (group && group.userData && group.userData.gn) {
+          const gn = group.userData.gn;
+          const btn = BUTTONS.find(b => GROUP_MAP[b.key]?.includes(gn));
+          if (btn) {
+            setTarget(btn.key);
+          }
+        }
+      }
+    };
+    
+    canvas.addEventListener('mousedown', onPointerDown);
+    canvas.addEventListener('touchstart', onPointerDown);
+    canvas.addEventListener('mouseup', onClick);
+    canvas.addEventListener('touchend', onClick);
+
     // Render
     let t2=0, rafId=0;
     function animate(){
@@ -329,6 +415,10 @@ const WorkoutHologram: React.FC<Props> = ({ workoutPlan }) => {
       cancelAnimationFrame(rafId);
       canvas.removeEventListener('mousedown',onMD); window.removeEventListener('mouseup',onMU); window.removeEventListener('mousemove',onMM);
       canvas.removeEventListener('touchstart',onTD); canvas.removeEventListener('touchend',onTE); canvas.removeEventListener('touchmove',onTM);
+      canvas.removeEventListener('mousedown', onPointerDown);
+      canvas.removeEventListener('touchstart', onPointerDown);
+      canvas.removeEventListener('mouseup', onClick);
+      canvas.removeEventListener('touchend', onClick);
       window.removeEventListener('resize',onResize);
       renderer.dispose();
     };
@@ -416,25 +506,61 @@ const WorkoutHologram: React.FC<Props> = ({ workoutPlan }) => {
           </div>
         </div>
 
-        {/* EXERCISE LIST */}
-        <div className="flex-1 flex flex-col gap-2 overflow-y-auto no-scrollbar" style={{maxHeight:420}}>
-          {todayWorkout?.exercises?.map((ex,i)=>(
-            <motion.div key={i} initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} transition={{delay:i*0.06}}
-              className="glass-premium rounded-2xl px-4 py-3 border border-white/5 hover:border-white/15 transition-all">
-              <div className="flex justify-between items-start gap-2">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{background:'#FF3366',boxShadow:'0 0 5px rgba(255,51,102,.6)'}}/>
-                    <p className="text-white font-black text-sm leading-tight">{ex.name}</p>
-                  </div>
-                  {ex.notes&&<p className="text-gray-500 text-[10px] font-medium pl-3.5 italic leading-relaxed">{ex.notes}</p>}
-                </div>
-                <div className="flex-shrink-0 text-right">
-                  <p className="font-black text-sm tabular-nums" style={{color:'#00E5FF'}}>{ex.sets}<span className="text-gray-600 mx-0.5 text-xs">×</span>{ex.reps}</p>
-                </div>
+        {/* EXERCISE LIST & INFO */}
+        <div className="flex-1 flex flex-col gap-3 overflow-y-auto no-scrollbar pr-1" style={{maxHeight:420}} data-lenis-prevent>
+          
+          {/* Muscle Info Card */}
+          <motion.div 
+            key={activeKey}
+            initial={{opacity:0,y:10}} 
+            animate={{opacity:1,y:0}} 
+            className="glass-premium rounded-2xl px-4 py-4 border border-white/10 relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-[#00E5FF] opacity-5 blur-3xl rounded-full pointer-events-none"></div>
+            <h3 className="text-[#00E5FF] font-black text-sm tracking-widest uppercase mb-3 flex items-center gap-2">
+              <i className="fas fa-crosshairs opacity-70"></i> {activeKey} TARGET
+            </h3>
+            
+            <div className="mb-4">
+              <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mb-1.5">Optimal Macros</p>
+              <p className="text-gray-200 text-xs leading-relaxed font-medium">{MUSCLE_INFO[activeKey]?.macros || MUSCLE_INFO['full'].macros}</p>
+            </div>
+            
+            <div>
+              <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mb-2">Recommended Exercises</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(MUSCLE_INFO[activeKey]?.exercises || MUSCLE_INFO['full'].exercises).map(ex => (
+                  <span key={ex} className="text-[10px] font-bold bg-[#00E5FF]/10 border border-[#00E5FF]/20 px-2.5 py-1 rounded-md text-[#00E5FF]">{ex}</span>
+                ))}
               </div>
-            </motion.div>
-          ))}
+            </div>
+          </motion.div>
+
+          {/* Today's Exercises */}
+          {todayWorkout?.exercises && todayWorkout.exercises.length > 0 && (
+            <div className="mt-2">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3 pl-1">Today's Protocol</p>
+              <div className="flex flex-col gap-2">
+                {todayWorkout.exercises.map((ex,i)=>(
+                  <motion.div key={i} initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} transition={{delay:i*0.06}}
+                    className="glass-premium rounded-2xl px-4 py-3 border border-white/5 hover:border-white/15 transition-all">
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{background:'#FF3366',boxShadow:'0 0 5px rgba(255,51,102,.6)'}}/>
+                          <p className="text-white font-black text-sm leading-tight">{ex.name}</p>
+                        </div>
+                        {ex.notes&&<p className="text-gray-500 text-[10px] font-medium pl-3.5 italic leading-relaxed">{ex.notes}</p>}
+                      </div>
+                      <div className="flex-shrink-0 text-right">
+                        <p className="font-black text-sm tabular-nums" style={{color:'#00E5FF'}}>{ex.sets}<span className="text-gray-600 mx-0.5 text-xs">×</span>{ex.reps}</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
