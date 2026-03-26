@@ -14,22 +14,6 @@
 }
 
 @layer base {
-  html.lenis, html.lenis body {
-    height: auto;
-  }
-  .lenis.lenis-smooth {
-    scroll-behavior: auto !important;
-  }
-  .lenis.lenis-smooth [data-lenis-prevent] {
-    overscroll-behavior: contain;
-  }
-  .lenis.lenis-stopped {
-    overflow: hidden;
-  }
-  .lenis.lenis-smooth iframe {
-    pointer-events: none;
-  }
-
   body {
     @apply bg-dark text-gray-100 antialiased selection:bg-primary/30;
     overscroll-behavior-y: none;
@@ -133,12 +117,87 @@
   100% { transform: translate3d(0, 0px, 0); }
 }
 
+@keyframes sunrise {
+  0% { transform: translateY(100px) scale(0.8); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes moonrise {
+  0% { transform: translateY(50px) scale(0.9); opacity: 0.5; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes cloud-move {
+  0% { transform: translateX(-10%); }
+  100% { transform: translateX(110%); }
+}
+
+@keyframes sun-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+
+@keyframes shooting-star {
+  0% { transform: translate(0, 0) rotate(-45deg) scale(1); opacity: 1; }
+  100% { transform: translate(-300px, 300px) rotate(-45deg) scale(0); opacity: 0; }
+}
+
+@keyframes bird-fly {
+  0% { transform: translate(-10vw, 10vh) scale(0.5); opacity: 0; }
+  10% { opacity: 1; }
+  50% { transform: translate(50vw, -5vh) scale(0.8); }
+  90% { opacity: 1; }
+  100% { transform: translate(110vw, 15vh) scale(0.5); opacity: 0; }
+}
+
+@keyframes sun-rays-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 .animate-fade-in {
   animation: fade-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-float {
   animation: float 6s ease-in-out infinite;
+}
+
+.animate-sunrise {
+  animation: sunrise 2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-moonrise {
+  animation: moonrise 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-twinkle {
+  animation: twinkle 4s ease-in-out infinite;
+}
+
+.animate-cloud {
+  animation: cloud-move 30s linear infinite;
+}
+
+.animate-sun-pulse {
+  animation: sun-pulse 8s ease-in-out infinite;
+}
+
+.animate-shooting-star {
+  animation: shooting-star 3s linear infinite;
+}
+
+.animate-bird {
+  animation: bird-fly 15s linear infinite;
+}
+
+.animate-sun-rays {
+  animation: sun-rays-rotate 60s linear infinite;
 }
 
 .ease-spring {

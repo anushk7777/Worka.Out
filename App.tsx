@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from './services/supabaseClient';
 import Auth from './components/Auth';
 import Onboarding from './components/Onboarding';
@@ -10,8 +10,6 @@ import CheckInDueModal from './components/CheckInDueModal';
 import ChatInterface from './components/ChatInterface'; 
 import ProfileSettings from './components/ProfileSettings'; 
 import { UserProfile, ProgressEntry, ActivityLevel, Goal, Gender, PersonalizedPlan } from './types';
-import { motion, AnimatePresence } from 'framer-motion';
-import Lenis from 'lenis';
 import { useDrag } from '@use-gesture/react';
 
 const App: React.FC = () => {
@@ -33,27 +31,10 @@ const App: React.FC = () => {
   
   // Chat State
   const [showChat, setShowChat] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Contextual Background State
   const [timePhase, setTimePhase] = useState<'morning' | 'noon' | 'evening' | 'night'>('night');
-
-  useEffect(() => {
-    // Initialize Lenis for smooth scrolling
-    const lenis = new Lenis({
-      autoRaf: true,
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      orientation: 'vertical',
-      gestureOrientation: 'vertical',
-      smoothWheel: true,
-      wheelMultiplier: 1,
-      touchMultiplier: 2,
-    });
-
-    return () => {
-      lenis.destroy();
-    };
-  }, []);
 
   useEffect(() => {
     // Determine Time Phase for Ambient Background
@@ -95,8 +76,10 @@ const App: React.FC = () => {
 
   const fetchUserData = async (userId: string) => {
     setLoading(true);
+    setFetchError(null);
     try {
-      const { data: profileData } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      const { data: profileData, error: profileError } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      if (profileError) throw profileError;
       if (profileData) {
         setProfile({
           name: profileData.name,
@@ -113,7 +96,8 @@ const App: React.FC = () => {
         });
       }
 
-      const { data: planData } = await supabase.from('user_plans').select('*').eq('user_id', userId).single();
+      const { data: planData, error: planError } = await supabase.from('user_plans').select('*').eq('user_id', userId).single();
+      if (planError && planError.code !== 'PGRST116') throw planError; // Ignore "not found" error
       if (planData) {
           setWorkoutPlan({ 
               workout: planData.workout_plan,
@@ -121,7 +105,8 @@ const App: React.FC = () => {
           });
       }
 
-      const { data: logsData } = await supabase.from('progress_logs').select('*').eq('user_id', userId).order('created_at', { ascending: true });
+      const { data: logsData, error: logsError } = await supabase.from('progress_logs').select('*').eq('user_id', userId).order('created_at', { ascending: true });
+      if (logsError) throw logsError;
       if (logsData) {
         const formattedLogs: ProgressEntry[] = logsData.map(log => ({
           id: log.id,
@@ -134,8 +119,9 @@ const App: React.FC = () => {
         }));
         setProgressLogs(formattedLogs);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching data:", error);
+      setFetchError(error.message || "Network error. Failed to fetch user data.");
     } finally {
       setLoading(false);
     }
@@ -224,10 +210,37 @@ const App: React.FC = () => {
     );
   }
 
+  if (fetchError) {
+    return (
+      <div className="fixed inset-0 bg-dark flex flex-col items-center justify-center z-[9999] p-6 text-center">
+        <div className="glass-premium p-8 rounded-[32px] border border-red-500/30 max-w-sm w-full">
+          <i className="fas fa-wifi text-4xl text-red-500 mb-4"></i>
+          <h2 className="text-xl font-black text-white mb-2">Connection Error</h2>
+          <p className="text-gray-400 text-sm mb-6">{fetchError}</p>
+          <button 
+            onClick={() => {
+                if (session) fetchUserData(session.user.id);
+                else setFetchError(null);
+            }}
+            className="w-full py-4 rounded-2xl bg-primary text-dark font-black text-xs uppercase tracking-widest hover:brightness-110 transition-all"
+          >
+            Retry Connection
+          </button>
+          <button 
+            onClick={handleSignOut}
+            className="w-full py-4 mt-3 rounded-2xl bg-white/5 text-white font-black text-xs uppercase tracking-widest hover:bg-white/10 transition-all"
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!session && !isGuest) return <Auth onGuestLogin={handleGuestLogin} />;
   
   if (!profile) return (
-      <div className="fixed inset-0 bg-dark overflow-y-auto overflow-x-hidden" data-lenis-prevent>
+      <div className="fixed inset-0 bg-dark overflow-y-auto overflow-x-hidden">
         <Onboarding 
             isGuest={isGuest}
             onComplete={(p, wp) => { 
@@ -248,11 +261,11 @@ const App: React.FC = () => {
         className="flex flex-col min-h-[100dvh] bg-dark text-gray-200 font-sans relative selection:bg-primary/30 bg-noise touch-pan-y"
     >
       
-      {/* Cinematic Dynamic Background - Optimized for 60fps */}
+      {/* Cinematic Dynamic Background - Optimized for mobile */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden transform-gpu">
-         <div className={`absolute top-[-20%] left-[-10%] w-[80%] h-[80%] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] ${ambient.orb1} rounded-full will-change-transform animate-[meshMove_20s_infinite_alternate] transition-colors duration-[3000ms] transform-gpu opacity-60`}></div>
-         <div className={`absolute bottom-[-20%] right-[-10%] w-[80%] h-[80%] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] ${ambient.orb2} rounded-full will-change-transform animate-[meshMove_25s_infinite_alternate-reverse] transition-colors duration-[3000ms] transform-gpu opacity-60`}></div>
-         <div className={`absolute top-1/3 left-1/3 w-[50%] h-[50%] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] ${ambient.orb3} rounded-full opacity-30 will-change-transform animate-pulse-slow transition-colors duration-[3000ms] transform-gpu`}></div>
+         <div className={`absolute top-[-20%] left-[-10%] w-[80%] h-[80%] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] ${ambient.orb1} rounded-full transition-colors duration-[3000ms] opacity-60`}></div>
+         <div className={`absolute bottom-[-20%] right-[-10%] w-[80%] h-[80%] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] ${ambient.orb2} rounded-full transition-colors duration-[3000ms] opacity-60`}></div>
+         <div className={`absolute top-1/3 left-1/3 w-[50%] h-[50%] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] ${ambient.orb3} rounded-full opacity-30 transition-colors duration-[3000ms]`}></div>
       </div>
 
       {isGuest && (
@@ -269,77 +282,41 @@ const App: React.FC = () => {
 
       {/* Content Area with Safe Area Padding */}
       <main className="flex-1 pb-[100px] pt-[var(--sat)] relative z-10 w-full max-w-lg mx-auto md:max-w-xl lg:max-w-2xl xl:max-w-4xl">
-        <AnimatePresence mode="wait">
+        <div key={currentTab} className="relative z-10">
           {currentTab === 'dashboard' && (
-            <motion.div
-              key="dashboard"
-              initial={{ opacity: 0, y: 10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.98 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              className="relative z-10"
-            >
-              <Dashboard 
-                  profile={profile} 
-                  userId={userId} 
-                  workoutPlan={workoutPlan} 
-                  logs={progressLogs} 
-                  onSignOut={handleSignOut} 
-                  onNavigate={setCurrentTab} 
-                  refreshTrigger={planVersion}
-                  isGeneratingPlan={isGeneratingPlan}
-                  setIsGeneratingPlan={setIsGeneratingPlan}
-              />
-            </motion.div>
+            <Dashboard 
+                profile={profile} 
+                userId={userId} 
+                workoutPlan={workoutPlan} 
+                logs={progressLogs} 
+                onSignOut={handleSignOut} 
+                onNavigate={setCurrentTab} 
+                refreshTrigger={planVersion}
+                isGeneratingPlan={isGeneratingPlan}
+                setIsGeneratingPlan={setIsGeneratingPlan}
+            />
           )}
           {currentTab === 'supplements' && (
-            <motion.div
-              key="supplements"
-              initial={{ opacity: 0, y: 10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.98 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              className="relative z-10"
-            >
-              <SupplementAdvisor 
-                  profile={profile}
-                  userId={userId}
-                  existingPlan={workoutPlan}
-                  isGuest={isGuest}
-              />
-            </motion.div>
+            <SupplementAdvisor 
+                profile={profile}
+                userId={userId}
+                existingPlan={workoutPlan}
+                isGuest={isGuest}
+            />
           )}
           {currentTab === 'progress' && (
-            <motion.div
-              key="progress"
-              initial={{ opacity: 0, y: 10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.98 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              className="relative z-10"
-            >
-              <ProgressTracker logs={progressLogs} onAddLog={handleAddLog} profile={profile} launchScanner={autoLaunchScanner} onScannerLaunched={() => setAutoLaunchScanner(false)} workoutPlan={workoutPlan} isGuest={isGuest} />
-            </motion.div>
+            <ProgressTracker logs={progressLogs} onAddLog={handleAddLog} profile={profile} launchScanner={autoLaunchScanner} onScannerLaunched={() => setAutoLaunchScanner(false)} workoutPlan={workoutPlan} isGuest={isGuest} />
           )}
           {currentTab === 'profile' && (
-            <motion.div
-              key="profile"
-              initial={{ opacity: 0, y: 10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.98 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              className="relative z-10"
-            >
-              <ProfileSettings 
-                  profile={profile} 
-                  onUpdateProfile={handleUpdateProfile} 
-                  onSignOut={handleSignOut}
-                  onPlanRegenerated={handlePlanRegenerated}
-                  isGuest={isGuest}
-              />
-            </motion.div>
+            <ProfileSettings 
+                profile={profile} 
+                onUpdateProfile={handleUpdateProfile} 
+                onSignOut={handleSignOut}
+                onPlanRegenerated={handlePlanRegenerated}
+                isGuest={isGuest}
+            />
           )}
-        </AnimatePresence>
+        </div>
       </main>
 
       {/* Floating Chat Button */}
@@ -358,45 +335,28 @@ const App: React.FC = () => {
 
       {/* Glass Bottom Nav */}
       <nav className="glass-premium fixed bottom-0 left-0 right-0 h-[85px] pb-[var(--sab)] flex justify-around items-center px-2 z-50 border-t border-white/5">
-        <button 
-          onClick={() => setCurrentTab('dashboard')}
-          className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
-        >
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'dashboard' ? 'bg-primary text-dark shadow-[0_0_20px_rgba(255,51,102,0.4)] translate-y-[-4px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
-            <i className={`fas fa-chart-pie text-lg ${currentTab === 'dashboard' ? 'scale-110' : ''}`}></i>
-          </div>
-          <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${currentTab === 'dashboard' ? 'text-primary' : 'text-gray-500'}`}>PLAN</span>
-        </button>
-
-        <button 
-          onClick={() => setCurrentTab('progress')}
-          className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
-        >
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'progress' ? 'bg-primary text-dark shadow-[0_0_20px_rgba(255,51,102,0.4)] translate-y-[-4px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
-            <i className={`fas fa-chart-line text-lg ${currentTab === 'progress' ? 'scale-110' : ''}`}></i>
-          </div>
-          <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${currentTab === 'progress' ? 'text-primary' : 'text-gray-500'}`}>LOG</span>
-        </button>
-
-        <button 
-          onClick={() => setCurrentTab('supplements')}
-          className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
-        >
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'supplements' ? 'bg-primary text-dark shadow-[0_0_20px_rgba(255,51,102,0.4)] translate-y-[-4px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
-            <i className={`fas fa-flask text-lg ${currentTab === 'supplements' ? 'scale-110' : ''}`}></i>
-          </div>
-          <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${currentTab === 'supplements' ? 'text-primary' : 'text-gray-500'}`}>SUPP</span>
-        </button>
-
-        <button 
-          onClick={() => setCurrentTab('profile')}
-          className={`group flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
-        >
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === 'profile' ? 'bg-primary text-dark shadow-[0_0_20px_rgba(255,51,102,0.4)] translate-y-[-4px]' : 'bg-transparent text-gray-400 group-hover:bg-white/5'}`}>
-            <i className={`fas fa-user text-lg ${currentTab === 'profile' ? 'scale-110' : ''}`}></i>
-          </div>
-          <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${currentTab === 'profile' ? 'text-primary' : 'text-gray-500'}`}>YOU</span>
-        </button>
+        {[
+          { id: 'dashboard', icon: 'fa-chart-pie', label: 'PLAN' },
+          { id: 'progress', icon: 'fa-chart-line', label: 'LOG' },
+          { id: 'supplements', icon: 'fa-flask', label: 'SUPP' },
+          { id: 'profile', icon: 'fa-user', label: 'YOU' },
+        ].map((tab) => (
+          <button 
+            key={tab.id}
+            onClick={() => setCurrentTab(tab.id as any)}
+            className={`group relative flex flex-col items-center justify-center w-16 h-full active:scale-90 transition-transform duration-300 ease-spring`}
+          >
+            <div className={`relative w-10 h-10 rounded-full flex items-center justify-center mb-1 transition-all duration-500 ease-spring ${currentTab === tab.id ? 'text-dark translate-y-[-4px]' : 'text-gray-400 group-hover:bg-white/5'}`}>
+              {currentTab === tab.id && (
+                <div
+                  className="absolute inset-0 bg-primary rounded-full shadow-[0_0_20px_rgba(255,51,102,0.4)] transition-all duration-300"
+                />
+              )}
+              <i className={`fas ${tab.icon} text-lg relative z-10 ${currentTab === tab.id ? 'scale-110' : ''} transition-transform duration-300`}></i>
+            </div>
+            <span className={`text-[9px] font-black tracking-widest transition-colors duration-300 ${currentTab === tab.id ? 'text-primary' : 'text-gray-500'}`}>{tab.label}</span>
+          </button>
+        ))}
       </nav>
     </div>
   );

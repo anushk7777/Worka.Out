@@ -8,7 +8,6 @@ import { predictWeightTrajectory } from '../services/analyticsService';
 import BarcodeScanner from './BarcodeScanner';
 import { FOOD_DATABASE, MOTIVATIONAL_QUOTES } from '../constants'; 
 import CircularSlider from './CircularSlider';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 
 const QuantitySelector = ({ initialValue, onConfirm, onCancel, min = 0, max = 1000, step = 10, label = "grams" }: { initialValue: string, onConfirm: (val: string) => void, onCancel: () => void, min?: number, max?: number, step?: number, label?: string }) => {
@@ -57,28 +56,13 @@ const QuantitySelector = ({ initialValue, onConfirm, onCancel, min = 0, max = 10
 };
 const SplitText = ({ text, className = '' }: { text: string, className?: string }) => {
   return (
-    <span className={`inline-block ${className}`}>
-      {text.split('').map((char, index) => (
-        <motion.span
-          key={`${char}-${index}`}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: index * 0.05, ease: [0.16, 1, 0.3, 1] }}
-          className="inline-block"
-        >
-          {char === ' ' ? '\u00A0' : char}
-        </motion.span>
-      ))}
+    <span className={`inline-block animate-fade-in ${className}`}>
+      {text}
     </span>
   );
 };
 
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { EffectCards } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/effect-cards';
-
-import { ScrollReveal } from './ScrollReveal';
+import WorkoutHologram from './WorkoutHologram';
 
 interface Props {
   userId: string;
@@ -100,8 +84,33 @@ type TimePhase = 'morning' | 'noon' | 'evening' | 'night';
 const MorningComponent = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#0F172A]">
     <div className="absolute inset-0 bg-gradient-to-b from-[#0f172a] via-[#1e3a8a] to-[#7c2d12] opacity-90"></div>
-    <div className="absolute -bottom-16 -left-10 w-72 h-72 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-orange-500/70 via-yellow-500/30 to-transparent rounded-full animate-sunrise transform-gpu"></div>
+    
+    {/* Sun and Rays */}
+    <div className="absolute -bottom-16 -left-10 w-72 h-72 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-orange-500/70 via-yellow-500/30 to-transparent rounded-full animate-sunrise transform-gpu">
+      <div className="absolute inset-[-50%] bg-[conic-gradient(from_0deg_at_50%_50%,_rgba(255,255,255,0)_0deg,_rgba(255,200,0,0.1)_20deg,_rgba(255,255,255,0)_40deg,_rgba(255,200,0,0.1)_60deg,_rgba(255,255,255,0)_80deg,_rgba(255,200,0,0.1)_100deg,_rgba(255,255,255,0)_120deg,_rgba(255,200,0,0.1)_140deg,_rgba(255,255,255,0)_160deg,_rgba(255,200,0,0.1)_180deg,_rgba(255,255,255,0)_200deg,_rgba(255,200,0,0.1)_220deg,_rgba(255,255,255,0)_240deg,_rgba(255,200,0,0.1)_260deg,_rgba(255,255,255,0)_280deg,_rgba(255,200,0,0.1)_300deg,_rgba(255,255,255,0)_320deg,_rgba(255,200,0,0.1)_340deg,_rgba(255,255,255,0)_360deg)] animate-sun-rays rounded-full"></div>
+    </div>
+    
     <div className="absolute bottom-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-yellow-200/10 via-transparent to-transparent animate-pulse-slow"></div>
+    
+    {/* Morning Mist */}
+    <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-white/10 to-transparent blur-xl animate-pulse-slow"></div>
+    
+    {/* Clouds */}
+    <div className="absolute top-10 left-[-20%] w-32 h-8 bg-white/10 rounded-full blur-md animate-cloud"></div>
+    <div className="absolute top-24 left-[-40%] w-48 h-12 bg-white/5 rounded-full blur-lg animate-cloud" style={{ animationDelay: '5s', animationDuration: '40s' }}></div>
+    <div className="absolute top-16 left-[-60%] w-64 h-10 bg-orange-200/5 rounded-full blur-xl animate-cloud" style={{ animationDelay: '12s', animationDuration: '55s' }}></div>
+    
+    {/* Birds */}
+    <div className="absolute top-20 left-0 text-white/40 text-[8px] animate-bird" style={{ animationDelay: '2s', animationDuration: '20s' }}>
+      <i className="fas fa-dove"></i>
+    </div>
+    <div className="absolute top-16 left-0 text-white/30 text-[6px] animate-bird" style={{ animationDelay: '2.5s', animationDuration: '22s' }}>
+      <i className="fas fa-dove"></i>
+    </div>
+    <div className="absolute top-24 left-0 text-white/20 text-[5px] animate-bird" style={{ animationDelay: '3s', animationDuration: '25s' }}>
+      <i className="fas fa-dove"></i>
+    </div>
+    
     <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/20"></div>
   </div>
 );
@@ -109,11 +118,35 @@ const MorningComponent = () => (
 const NoonComponent = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#0ea5e9]">
     <div className="absolute inset-0 bg-gradient-to-br from-[#0284c7] via-[#38bdf8] to-[#bae6fd]"></div>
-    <div className="absolute -top-10 -right-10 w-64 h-64 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-yellow-300/60 to-transparent rounded-full animate-pulse-slow transform-gpu"></div>
-    <div className="absolute top-[-20px] right-[-20px] w-40 h-40 bg-gradient-to-br from-yellow-100 to-yellow-400 rounded-full">
+    
+    {/* Sun and Rays */}
+    <div className="absolute -top-10 -right-10 w-64 h-64 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-yellow-300/60 to-transparent rounded-full animate-sun-pulse transform-gpu">
+      <div className="absolute inset-[-50%] bg-[conic-gradient(from_0deg_at_50%_50%,_rgba(255,255,255,0)_0deg,_rgba(255,255,255,0.2)_20deg,_rgba(255,255,255,0)_40deg,_rgba(255,255,255,0.2)_60deg,_rgba(255,255,255,0)_80deg,_rgba(255,255,255,0.2)_100deg,_rgba(255,255,255,0)_120deg,_rgba(255,255,255,0.2)_140deg,_rgba(255,255,255,0)_160deg,_rgba(255,255,255,0.2)_180deg,_rgba(255,255,255,0)_200deg,_rgba(255,255,255,0.2)_220deg,_rgba(255,255,255,0)_240deg,_rgba(255,255,255,0.2)_260deg,_rgba(255,255,255,0)_280deg,_rgba(255,255,255,0.2)_300deg,_rgba(255,255,255,0)_320deg,_rgba(255,255,255,0.2)_340deg,_rgba(255,255,255,0)_360deg)] animate-sun-rays rounded-full"></div>
+    </div>
+    <div className="absolute top-[-20px] right-[-20px] w-40 h-40 bg-gradient-to-br from-yellow-100 to-yellow-400 rounded-full animate-sun-pulse shadow-[0_0_60px_rgba(250,204,21,0.6)]">
       <div className="absolute inset-[-20px] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-yellow-300/60 to-transparent rounded-full pointer-events-none"></div>
     </div>
-    <div className="absolute top-1/2 left-1/4 w-32 h-32 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/10 to-transparent rounded-full transform-gpu"></div>
+    
+    {/* Lens Flare Effect */}
+    <div className="absolute top-1/4 right-1/4 w-32 h-32 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/20 to-transparent rounded-full transform-gpu blur-xl animate-pulse-slow"></div>
+    <div className="absolute top-1/3 right-1/3 w-16 h-16 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-200/30 to-transparent rounded-full transform-gpu blur-lg animate-pulse-slow" style={{ animationDelay: '1s' }}></div>
+    
+    {/* Clouds */}
+    <div className="absolute top-16 left-[-20%] w-40 h-10 bg-white/30 rounded-full blur-md animate-cloud"></div>
+    <div className="absolute top-32 left-[-50%] w-56 h-16 bg-white/20 rounded-full blur-lg animate-cloud" style={{ animationDelay: '10s', animationDuration: '35s' }}></div>
+    <div className="absolute top-8 left-[-80%] w-72 h-20 bg-white/10 rounded-full blur-xl animate-cloud" style={{ animationDelay: '20s', animationDuration: '60s' }}></div>
+    
+    {/* Birds */}
+    <div className="absolute top-24 left-0 text-white/50 text-[10px] animate-bird" style={{ animationDelay: '0s', animationDuration: '15s' }}>
+      <i className="fas fa-dove"></i>
+    </div>
+    <div className="absolute top-20 left-0 text-white/40 text-[8px] animate-bird" style={{ animationDelay: '0.5s', animationDuration: '16s' }}>
+      <i className="fas fa-dove"></i>
+    </div>
+    <div className="absolute top-28 left-0 text-white/30 text-[6px] animate-bird" style={{ animationDelay: '1s', animationDuration: '18s' }}>
+      <i className="fas fa-dove"></i>
+    </div>
+    
     <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/10 to-transparent"></div>
   </div>
 );
@@ -121,7 +154,23 @@ const NoonComponent = () => (
 const EveningComponent = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#4c1d95]">
     <div className="absolute inset-0 bg-gradient-to-br from-[#312e81] via-[#701a75] to-[#ea580c]"></div>
+    
+    {/* Sun */}
     <div className="absolute bottom-10 -right-10 w-56 h-56 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-orange-600/80 via-red-500/40 to-transparent rounded-full animate-pulse-slow transform-gpu"></div>
+    
+    {/* Clouds */}
+    <div className="absolute top-20 left-[-30%] w-48 h-12 bg-orange-300/20 rounded-full blur-md animate-cloud" style={{ animationDuration: '45s' }}></div>
+    <div className="absolute top-32 left-[-40%] w-64 h-16 bg-pink-500/10 rounded-full blur-lg animate-cloud" style={{ animationDelay: '15s', animationDuration: '50s' }}></div>
+    <div className="absolute top-10 left-[-60%] w-80 h-20 bg-purple-500/10 rounded-full blur-xl animate-cloud" style={{ animationDelay: '25s', animationDuration: '65s' }}></div>
+    
+    {/* Birds returning */}
+    <div className="absolute top-16 left-0 text-orange-200/40 text-[8px] animate-bird" style={{ animationDelay: '5s', animationDuration: '25s' }}>
+      <i className="fas fa-dove"></i>
+    </div>
+    <div className="absolute top-12 left-0 text-orange-200/30 text-[6px] animate-bird" style={{ animationDelay: '5.5s', animationDuration: '27s' }}>
+      <i className="fas fa-dove"></i>
+    </div>
+    
     <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/40 to-transparent"></div>
     <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/20"></div>
   </div>
@@ -129,17 +178,42 @@ const EveningComponent = () => (
 
 const NightComponent = () => (
   <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-[32px] z-0 bg-[#020617]">
-    <div className="absolute inset-0 bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#1e1b4b]"></div>
-    <div className="absolute top-8 right-8 w-24 h-24 bg-gray-200 rounded-full animate-moonrise opacity-90">
-      <div className="absolute inset-[-40px] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/10 to-transparent rounded-full pointer-events-none"></div>
-      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-transparent to-black/30"></div>
-      <div className="absolute top-4 left-3 w-4 h-4 bg-[#94a3b8] rounded-full opacity-30"></div>
-      <div className="absolute top-10 left-10 w-6 h-6 bg-[#94a3b8] rounded-full opacity-20"></div>
+    {/* Deep Midnight Blue Gradient */}
+    <div className="absolute inset-0 bg-gradient-to-br from-[#020617] via-[#081b3f] to-[#040b16]"></div>
+    
+    {/* Aurora Effect */}
+    <div className="absolute top-0 left-[-20%] w-[140%] h-1/2 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-500/10 via-blue-500/5 to-transparent blur-3xl animate-pulse-slow transform-gpu"></div>
+    <div className="absolute top-10 left-[-10%] w-[120%] h-1/3 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-500/10 via-purple-500/5 to-transparent blur-3xl animate-pulse-slow transform-gpu" style={{ animationDelay: '3s' }}></div>
+    
+    {/* Moon */}
+    <div className="absolute top-12 right-12 w-32 h-32 bg-blue-50 rounded-full animate-moonrise opacity-95 shadow-[0_0_80px_rgba(191,219,254,0.5)]">
+      <div className="absolute inset-[-80px] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-200/20 via-blue-400/5 to-transparent rounded-full pointer-events-none animate-pulse-slow"></div>
+      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-transparent via-transparent to-blue-900/30"></div>
+      {/* Moon Craters */}
+      <div className="absolute top-8 left-6 w-6 h-6 bg-[#94a3b8] rounded-full opacity-30 blur-[1px]"></div>
+      <div className="absolute top-16 left-16 w-10 h-10 bg-[#94a3b8] rounded-full opacity-20 blur-[2px]"></div>
+      <div className="absolute top-20 left-8 w-5 h-5 bg-[#94a3b8] rounded-full opacity-25 blur-[1px]"></div>
     </div>
+    
+    {/* Stars */}
     <div className="absolute top-10 left-10 w-0.5 h-0.5 bg-white rounded-full animate-twinkle shadow-[0_0_4px_white]"></div>
-    <div className="absolute top-24 left-1/3 w-1 h-1 bg-white/70 rounded-full animate-twinkle delay-75"></div>
-    <div className="absolute bottom-1/3 right-1/2 w-0.5 h-0.5 bg-white/50 rounded-full animate-twinkle delay-150"></div>
-    <div className="absolute top-1/2 left-10 w-1 h-1 bg-white/80 rounded-full animate-twinkle delay-300"></div>
+    <div className="absolute top-24 left-1/3 w-1 h-1 bg-blue-100/80 rounded-full animate-twinkle" style={{ animationDelay: '1s' }}></div>
+    <div className="absolute bottom-1/3 right-1/2 w-0.5 h-0.5 bg-white/50 rounded-full animate-twinkle" style={{ animationDelay: '2s' }}></div>
+    <div className="absolute top-1/2 left-10 w-1 h-1 bg-white/80 rounded-full animate-twinkle" style={{ animationDelay: '3s' }}></div>
+    <div className="absolute top-1/4 right-1/4 w-1.5 h-1.5 bg-blue-50/90 rounded-full animate-twinkle shadow-[0_0_6px_white]" style={{ animationDelay: '0.5s' }}></div>
+    <div className="absolute top-1/3 left-1/4 w-0.5 h-0.5 bg-blue-200/80 rounded-full animate-twinkle shadow-[0_0_4px_blue]" style={{ animationDelay: '1.5s' }}></div>
+    <div className="absolute top-2/3 right-1/3 w-1 h-1 bg-indigo-100/70 rounded-full animate-twinkle shadow-[0_0_4px_indigo]" style={{ animationDelay: '2.5s' }}></div>
+    <div className="absolute top-1/5 left-1/2 w-1 h-1 bg-white/60 rounded-full animate-twinkle" style={{ animationDelay: '0.8s' }}></div>
+    <div className="absolute top-3/4 left-1/4 w-0.5 h-0.5 bg-white/40 rounded-full animate-twinkle" style={{ animationDelay: '1.2s' }}></div>
+    
+    {/* Shooting Stars */}
+    <div className="absolute top-0 right-1/4 w-32 h-0.5 bg-gradient-to-r from-transparent via-blue-200 to-transparent animate-shooting-star" style={{ animationDelay: '5s' }}></div>
+    <div className="absolute top-10 right-10 w-24 h-0.5 bg-gradient-to-r from-transparent via-white to-transparent animate-shooting-star" style={{ animationDelay: '12s', animationDuration: '2s' }}></div>
+    <div className="absolute top-20 right-1/3 w-40 h-0.5 bg-gradient-to-r from-transparent via-indigo-200 to-transparent animate-shooting-star" style={{ animationDelay: '25s', animationDuration: '1.5s' }}></div>
+    
+    {/* Night Mist */}
+    <div className="absolute bottom-0 left-0 w-full h-1/3 bg-gradient-to-t from-blue-900/20 to-transparent blur-2xl"></div>
+    
     <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent"></div>
   </div>
 );
@@ -175,9 +249,9 @@ const TypewriterText = ({ text }: { text: string }) => {
 
 const ScrollRevealItem: React.FC<{ children: React.ReactNode, delay?: number }> = ({ children, delay = 0 }) => {
   return (
-    <ScrollReveal delay={delay / 1000} distance={20} duration={0.5}>
+    <div style={{ animationDelay: `${delay}ms` }} className="animate-fade-in will-change-opacity">
       {children}
-    </ScrollReveal>
+    </div>
   );
 };
 
@@ -409,7 +483,9 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
             setRecentPlans(validData);
             setTodayPlan(validData.find((p: any) => p.date === today) || null);
         }
-    } catch (err: any) { console.error("Failed to fetch plans:", getErrorMessage(err)); }
+    } catch (err: any) { 
+        console.warn("Could not fetch plans from server. Using local state.", getErrorMessage(err)); 
+    }
     setLoading(false);
     setIsSyncing(false);
   };
@@ -426,12 +502,11 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
     }
     if (isGuest) return;
     try {
-        await supabase.from('daily_meal_plans').update({ meals: updatedMeals }).eq('id', todayPlan.id);
+        const { error } = await supabase.from('daily_meal_plans').update({ meals: updatedMeals }).eq('id', todayPlan.id);
+        if (error) console.warn("Failed to save progress to Supabase:", error);
         setRecentPlans(prev => [updatedPlan, ...(prev || []).filter(p => p.date !== todayPlan.date)]);
     } catch (err) { 
-        setTodayPlan(todayPlan); 
-        triggerVisualHaptic('error', `meal-${index}`);
-        alert("Failed to save progress."); 
+        console.warn("Network error saving progress:", err);
     }
   };
 
@@ -485,14 +560,18 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
         if (!newPlan || !newPlan.meals || !Array.isArray(newPlan.meals)) throw new Error("Invalid plan generated");
         
         if (!isGuest) {
-            const { error: upsertError } = await supabase.from('daily_meal_plans').upsert({ 
-                user_id: userId, 
-                date: today, 
-                meals: newPlan.meals, 
-                macros: newPlan.macros 
-            }, { onConflict: 'user_id, date' });
-            
-            if (upsertError) throw upsertError;
+            try {
+                const { error: upsertError } = await supabase.from('daily_meal_plans').upsert({ 
+                    user_id: userId, 
+                    date: today, 
+                    meals: newPlan.meals, 
+                    macros: newPlan.macros 
+                }, { onConflict: 'user_id, date' });
+                
+                if (upsertError) console.warn("Failed to save to Supabase:", upsertError);
+            } catch (e) {
+                console.warn("Network error saving to Supabase:", e);
+            }
         }
         
         setTodayPlan(newPlan);
@@ -595,13 +674,17 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
         }
 
         if (!isGuest) {
-            const { error: upsertError } = await supabase.from('daily_meal_plans').upsert({ 
-                 user_id: userId, 
-                 date: todayPlan.date, 
-                 meals: updatedPlan.meals, 
-                 macros: updatedPlan.macros 
-            }, { onConflict: 'user_id, date' });
-            if (upsertError) throw upsertError;
+            try {
+                const { error: upsertError } = await supabase.from('daily_meal_plans').upsert({ 
+                     user_id: userId, 
+                     date: todayPlan.date, 
+                     meals: updatedPlan.meals, 
+                     macros: updatedPlan.macros 
+                }, { onConflict: 'user_id, date' });
+                if (upsertError) console.warn("Failed to save to Supabase:", upsertError);
+            } catch (e) {
+                console.warn("Network error saving to Supabase:", e);
+            }
         }
         setTodayPlan(updatedPlan);
         setRecentPlans(prev => [updatedPlan, ...(prev || []).filter(p => p.date !== todayPlan.date)]);
@@ -652,13 +735,21 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
           };
           const updatedPlan = { ...todayPlan, meals: newMeals, macros: newTotals };
           if (!isGuest) {
-              await supabase.from('daily_meal_plans').upsert({ user_id: userId, date: todayPlan.date, meals: updatedPlan.meals, macros: updatedPlan.macros }, { onConflict: 'user_id, date' });
+              try {
+                  const { error } = await supabase.from('daily_meal_plans').upsert({ user_id: userId, date: todayPlan.date, meals: updatedPlan.meals, macros: updatedPlan.macros }, { onConflict: 'user_id, date' });
+                  if (error) console.warn("Failed to save to Supabase:", error);
+              } catch (e) {
+                  console.warn("Network error saving to Supabase:", e);
+              }
           }
           setTodayPlan(updatedPlan);
           setRecentPlans(prev => [updatedPlan, ...(prev || []).filter(p => p.date !== todayPlan.date)]);
           setAddFoodModal(false); setAddFoodInput(''); setSearchResults([]); setSelectedFoodItem(null);
           triggerVisualHaptic('success', 'add-btn');
-      } catch (err: any) { alert(`Failed: ${getErrorMessage(err)}`); } 
+      } catch (err: any) { 
+          console.error("Failed to add food:", err);
+          alert(`Failed: ${getErrorMessage(err)}`); 
+      } 
   };
 
   return (
@@ -934,19 +1025,7 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
       </div>
       
       <div className="min-h-[450px] relative z-10 pb-12 px-1">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 15, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -15, scale: 0.98 }}
-            transition={{ 
-                type: "spring", 
-                stiffness: 300, 
-                damping: 30, 
-                mass: 0.8 
-            }}
-          >
+        <div key={activeTab} className="animate-fade-in will-change-opacity">
             {activeTab === 'diet' && (
                 <div className="space-y-6">
                     {/* --- GOAL MISMATCH ALERT --- */}
@@ -1086,45 +1165,7 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
             {activeTab === 'workout' && (
                 <div className="w-full">
                 {workoutPlan && Array.isArray(workoutPlan.workout) ? (
-                    <Swiper
-                        effect={'cards'}
-                        grabCursor={true}
-                        modules={[EffectCards]}
-                        cardsEffect={{
-                            slideShadows: false,
-                        }}
-                        observer={true}
-                        observeParents={true}
-                        className="w-full max-w-[340px] aspect-[3/4] mx-auto"
-                    >
-                        {workoutPlan.workout.map((day, i) => (
-                            <SwiperSlide key={i} className="h-full rounded-[42px] overflow-hidden bg-[#1A1A24] shadow-2xl border border-white/10 transform-gpu will-change-transform">
-                                <div className="h-full hover:border-white/20 transition-all duration-700 flex flex-col">
-                                    <div className="p-7 bg-white/[0.03] border-b border-white/5 flex justify-between items-center shrink-0">
-                                        <h3 className="font-black text-white text-2xl tracking-tighter leading-none">{day.day}</h3>
-                                        <span className="text-[10px] bg-primary text-dark px-4 py-1.5 rounded-full font-black uppercase tracking-[0.15em] border border-white/20 shadow-lg">{day.focus}</span>
-                                    </div>
-                                    <div className="p-7 space-y-6 overflow-y-auto no-scrollbar flex-1" data-lenis-prevent>
-                                        {(day.exercises || []).map((ex, j) => (
-                                            <div key={j} className="flex justify-between items-start gap-6 group">
-                                                <div className="flex-1">
-                                                    <p className="text-white font-black text-lg leading-tight group-hover:text-primary transition-colors">{ex.name}</p>
-                                                    {ex.notes && <p className="text-[11px] text-gray-500 mt-2 font-medium leading-relaxed bg-white/[0.02] p-2 rounded-lg">{ex.notes}</p>}
-                                                </div>
-                                                <div className="text-right shrink-0">
-                                                    <div className="glass-liquid px-4 py-2.5 rounded-[20px] border-white/5 shadow-inner">
-                                                        <span className="text-[12px] font-black font-mono text-gray-400 tabular-nums">
-                                                            {ex.sets} <span className="text-primary/60 mx-1">×</span> {ex.reps}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </SwiperSlide>
-                        ))}
-                    </Swiper>
+                    <WorkoutHologram workoutPlan={workoutPlan} />
                 ) : (
                     <div className="text-center py-24 glass-premium rounded-[48px] border-white/5 opacity-40">
                          <i className="fas fa-dumbbell text-5xl text-gray-700 mb-6 animate-pulse"></i>
@@ -1235,14 +1276,13 @@ export const Dashboard: React.FC<Props> = ({ userId, profile, workoutPlan, logs 
                 )}
             </div>
         )}
-        </motion.div>
-        </AnimatePresence>
+        </div>
       </div>
 
       {addFoodModal && (
         <div className="fixed inset-0 bg-dark/95 flex items-center justify-center z-[70] p-6 backdrop-blur-sm animate-fade-in transform-gpu">
           <div className="glass-premium w-full max-w-sm rounded-[48px] overflow-hidden shadow-[0_50px_100px_-20px_rgba(0,0,0,0.8)] border border-white/20 flex flex-col max-h-[85vh] inner-glow animate-scale-in">
-            <div className="p-10 flex-1 overflow-y-auto no-scrollbar" data-lenis-prevent>
+            <div className="p-10 flex-1 overflow-y-auto no-scrollbar">
                 <div className="flex justify-between items-center mb-10">
                     <h2 className="text-2xl font-black text-white tracking-tighter">{selectedFoodItem ? 'Quantify' : 'Injection Point'}</h2>
                     <button onClick={() => { setAddFoodModal(false); setAddFoodInput(''); setSelectedFoodItem(null); }} className="w-12 h-12 rounded-full bg-white/[0.05] border border-white/10 flex items-center justify-center text-gray-400 haptic-press"><i className="fas fa-xmark text-lg"></i></button>

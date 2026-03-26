@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, Goal, ActivityLevel } from '../types';
 import { supabase } from '../services/supabaseClient';
 import { calculatePlan } from './Calculator';
-import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
   profile: UserProfile;

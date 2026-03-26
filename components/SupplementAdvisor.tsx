@@ -3,7 +3,6 @@ import React, { useEffect, useState } from 'react';
 import { UserProfile, SupplementRecommendation, PersonalizedPlan } from '../types';
 import { generateSupplementStack } from '../services/geminiService';
 import { supabase } from '../services/supabaseClient';
-import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
   profile: UserProfile;
@@ -60,12 +59,10 @@ const SupplementAdvisor: React.FC<Props> = ({ profile, userId, existingPlan, isG
     const isExpanded = expandedItems.has(index);
     
     return (
-        <motion.div 
+        <div 
             key={index} 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: index * 0.1, ease: "easeOut" }}
-            className="glass-premium rounded-[32px] border border-white/10 relative overflow-hidden group transition-all duration-500 hover:border-white/30 gpu"
+            style={{ animationDelay: `${index * 0.1}s` }}
+            className="glass-premium rounded-[32px] border border-white/10 relative overflow-hidden group transition-all duration-500 hover:border-white/30 gpu animate-fade-in will-change-opacity"
         >
             <div 
                 className="p-6 cursor-pointer relative z-10"
@@ -142,7 +139,7 @@ const SupplementAdvisor: React.FC<Props> = ({ profile, userId, existingPlan, isG
             </div>
             
             <div className={`absolute top-0 right-0 w-48 h-48 rounded-full blur-[40px] -mr-16 -mt-16 pointer-events-none transition-opacity duration-700 opacity-20 transform-gpu ${accentColor}`}></div>
-        </motion.div>
+        </div>
     );
   };
 

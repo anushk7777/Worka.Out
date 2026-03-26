@@ -4,10 +4,8 @@ import { ProgressEntry, UserProfile, PersonalizedPlan } from '../types';
 import { supabase } from '../services/supabaseClient';
 import BodyFatAnalyzer from './BodyFatAnalyzer';
 import ComparisonSlider from './ComparisonSlider';
-import WorkoutHologram from './WorkoutHologram';
 import { generateWorkoutSplit } from '../services/geminiService';
 import { calculatePlan } from './Calculator';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useAutoAnimate } from '@formkit/auto-animate/react';
 
 interface Props {
@@ -283,8 +281,6 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
         <p className="text-gray-400 text-sm">Track your progress. Significant weight changes will automatically update your profile and stats.</p>
       </div>
 
-      <WorkoutHologram workoutPlan={workoutPlan || null} />
-
       {/* Input Section */}
       <div className="glass-premium p-0 rounded-[24px] border border-white/10 relative overflow-hidden">
         
@@ -311,18 +307,9 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
         </div>
 
         <div className="p-6 relative min-h-[300px]">
-            <AnimatePresence mode="wait">
-            <motion.div
+            <div
                 key={logMode}
-                initial={{ opacity: 0, y: 15, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -15, scale: 0.98 }}
-                transition={{ 
-                    type: "spring", 
-                    stiffness: 300, 
-                    damping: 30, 
-                    mass: 0.8 
-                }}
+                className="animate-fade-in will-change-opacity"
             >
             {logMode === 'quick' && (
                  /* --- QUICK LOG MODE --- */
@@ -539,8 +526,7 @@ const ProgressTracker: React.FC<Props> = ({ logs, onAddLog, profile, launchScann
                     )}
                 </button>
             )}
-            </motion.div>
-            </AnimatePresence>
+            </div>
         </div>
       </div>
 

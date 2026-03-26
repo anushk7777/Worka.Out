@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
   onGuestLogin?: () => void;
@@ -121,11 +120,8 @@ const Auth: React.FC<Props> = ({ onGuestLogin }) => {
           <div className="absolute bottom-[-20%] left-[-10%] w-[70%] h-[70%] bg-blue-900/20 rounded-full blur-[80px] transform-gpu"></div>
       </div>
 
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-        className="glass-premium w-full max-w-sm p-10 rounded-[48px] shadow-[0_40px_100px_rgba(0,0,0,0.8)] relative z-10 backdrop-blur-xl border border-white/10 inner-glow gpu transform-gpu"
+      <div 
+        className="glass-premium w-full max-w-sm p-10 rounded-[48px] shadow-[0_40px_100px_rgba(0,0,0,0.8)] relative z-10 backdrop-blur-xl border border-white/10 inner-glow gpu transform-gpu animate-fade-in"
       >
         <header className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-[28px] bg-gradient-to-tr from-primary to-yellow-500 mb-6 shadow-[0_0_40px_rgba(255,215,0,0.3)] transform rotate-12 border border-white/20 animate-float">
@@ -218,7 +214,7 @@ const Auth: React.FC<Props> = ({ onGuestLogin }) => {
             </button>
           )}
         </footer>
-      </motion.div>
+      </div>
     </div>
   );
 };
