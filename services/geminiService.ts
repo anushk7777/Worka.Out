@@ -185,7 +185,7 @@ export const generateWorkoutSplit = async (profile: UserProfile): Promise<Workou
     try {
         const ai = getAIClient();
         const response = await ai.models.generateContent({
-            model: "gemini-3.1-pro-preview",
+            model: "gemini-3-flash-preview",
             contents: prompt,
             config: { 
                 responseMimeType: "application/json",
@@ -259,7 +259,6 @@ export const generateDailyMealPlan = async (
       Intensity: ${aggressiveness}.
       ${medical}
       ${contextNote ? `Special Context: ${contextNote}` : ''}
-      Use Google Search to find accurate nutritional data for the foods you include to ensure the macros are realistic.
       Ensure all strings in the JSON response are properly closed and valid JSON syntax is maintained.
     `;
 
@@ -268,11 +267,9 @@ export const generateDailyMealPlan = async (
             const ai = getAIClient();
             console.log("Generating plan for:", dateStr);
             const response = await ai.models.generateContent({
-                model: "gemini-3.1-pro-preview", 
+                model: "gemini-3-flash-preview", 
                 contents: prompt,
                 config: { 
-                    tools: [{ googleSearch: {} }],
-                    maxOutputTokens: 32768, // Explicitly set max output tokens to allow room after thinking
                     responseMimeType: "application/json",
                     responseSchema: {
                       type: Type.OBJECT,
@@ -337,7 +334,7 @@ export const handleDietDeviation = async (currentPlan: DailyMealPlanDB, targetMa
 
       Task:
       1. Modify the meal items based on the user's instruction.
-      2. Recalculate the macros (protein, carbs, fats, calories) for the updated meal. Use Google Search to find accurate nutritional data.
+      2. Recalculate the macros (protein, carbs, fats, calories) for the updated meal.
       3. Return ONLY the updated meal JSON.
     `;
     try {
@@ -346,7 +343,6 @@ export const handleDietDeviation = async (currentPlan: DailyMealPlanDB, targetMa
             model: "gemini-3-flash-preview", 
             contents: prompt,
             config: { 
-                tools: [{ googleSearch: {} }],
                 responseMimeType: "application/json",
                 responseSchema: {
                   type: Type.OBJECT,
@@ -388,7 +384,7 @@ export const addFoodItem = async (currentPlan: DailyMealPlanDB, userDescription:
       
       Task:
       1. Identify the food items and their quantities.
-      2. Estimate the nutritional macros (protein, carbs, fats, calories) for this consumption. Use Google Search to find accurate nutritional data.
+      2. Estimate the nutritional macros (protein, carbs, fats, calories) for this consumption.
       3. Return a JSON object representing this as a meal addition.
     `;
     try {
@@ -397,7 +393,6 @@ export const addFoodItem = async (currentPlan: DailyMealPlanDB, userDescription:
             model: "gemini-3-flash-preview", 
             contents: prompt,
             config: { 
-                tools: [{ googleSearch: {} }],
                 responseMimeType: "application/json",
                 responseSchema: {
                   type: Type.OBJECT,
@@ -452,7 +447,7 @@ export const generateSupplementStack = async (profile: UserProfile): Promise<Sup
     try {
         const ai = getAIClient();
         const response = await ai.models.generateContent({
-            model: "gemini-3.1-pro-preview",
+            model: "gemini-3-flash-preview",
             contents: prompt,
             config: { 
                 responseMimeType: "application/json",

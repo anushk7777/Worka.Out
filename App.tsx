@@ -79,7 +79,7 @@ const App: React.FC = () => {
     setFetchError(null);
     try {
       const { data: profileData, error: profileError } = await supabase.from('profiles').select('*').eq('id', userId).single();
-      if (profileError) throw profileError;
+      if (profileError && profileError.code !== 'PGRST116') throw profileError;
       if (profileData) {
         setProfile({
           name: profileData.name,

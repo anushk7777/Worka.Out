@@ -180,7 +180,7 @@ export default function WorkoutHologram({ workoutPlan }: Props) {
       }
       // Dispose geometries and materials
       geometries.forEach(geo => geo.dispose());
-      Object.values(meshesRef.current).forEach(mesh => {
+      Object.values(meshesRef.current).forEach((mesh: any) => {
         if (mesh.material instanceof THREE.Material) mesh.material.dispose();
       });
       renderer.dispose();
@@ -237,7 +237,7 @@ export default function WorkoutHologram({ workoutPlan }: Props) {
       }
     }
 
-    Object.entries(meshesRef.current).forEach(([name, mesh]) => {
+    Object.entries(meshesRef.current).forEach(([name, mesh]: [string, any]) => {
       const mat = mesh.material as THREE.MeshPhysicalMaterial;
       const isActive = activeParts.includes(name);
       
