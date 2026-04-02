@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PersonalizedPlan } from '../types';
 
 interface Props {
@@ -7,34 +8,34 @@ interface Props {
 }
 
 const BODY_PARTS_DEFS = [
-  { name: 'head', geo: () => new THREE.SphereGeometry(1.2, 32, 32), pos: [0, 10, 0], scale: [1, 1.2, 1.1] },
-  { name: 'neck', geo: () => new THREE.CylinderGeometry(0.6, 0.7, 1.5, 32), pos: [0, 8.5, 0] },
-  { name: 'chest', geo: () => new THREE.CylinderGeometry(2.8, 2.2, 3, 32), pos: [0, 6.5, 0], scale: [1, 1, 0.6] },
-  { name: 'pec_l', geo: () => new THREE.SphereGeometry(1.4, 32, 32), pos: [-1.2, 6.8, 1.2], scale: [1, 0.8, 0.4], rot: [0.2, 0, 0.2] },
-  { name: 'pec_r', geo: () => new THREE.SphereGeometry(1.4, 32, 32), pos: [1.2, 6.8, 1.2], scale: [1, 0.8, 0.4], rot: [0.2, 0, -0.2] },
-  { name: 'abs', geo: () => new THREE.CylinderGeometry(2.1, 1.9, 3.5, 32), pos: [0, 3.5, 0.2], scale: [1, 1, 0.5] },
-  { name: 'pelvis', geo: () => new THREE.CylinderGeometry(2.2, 2.4, 2.5, 32), pos: [0, 1, 0], scale: [1, 1, 0.6] },
-  { name: 'shoulder_l', geo: () => new THREE.SphereGeometry(1.2, 32, 32), pos: [-3.2, 7.2, 0], scale: [1, 1.1, 1], rot: [0, 0, 0.2] },
-  { name: 'shoulder_r', geo: () => new THREE.SphereGeometry(1.2, 32, 32), pos: [3.2, 7.2, 0], scale: [1, 1.1, 1], rot: [0, 0, -0.2] },
-  { name: 'bicep_l', geo: () => new THREE.CapsuleGeometry(0.8, 2.5, 16, 16), pos: [-3.8, 4.5, 0], rot: [0, 0, 0.15] },
-  { name: 'bicep_r', geo: () => new THREE.CapsuleGeometry(0.8, 2.5, 16, 16), pos: [3.8, 4.5, 0], rot: [0, 0, -0.15] },
-  { name: 'forearm_l', geo: () => new THREE.CapsuleGeometry(0.6, 2.2, 16, 16), pos: [-4.2, 1.5, 0.2], rot: [-0.1, 0, 0.1] },
-  { name: 'forearm_r', geo: () => new THREE.CapsuleGeometry(0.6, 2.2, 16, 16), pos: [4.2, 1.5, 0.2], rot: [-0.1, 0, -0.1] },
-  { name: 'quad_l', geo: () => new THREE.CapsuleGeometry(1.3, 3.5, 32, 32), pos: [-1.2, -2.5, 0], rot: [0, 0, -0.05] },
-  { name: 'quad_r', geo: () => new THREE.CapsuleGeometry(1.3, 3.5, 32, 32), pos: [1.2, -2.5, 0], rot: [0, 0, 0.05] },
-  { name: 'calf_l', geo: () => new THREE.CapsuleGeometry(0.9, 3.0, 32, 32), pos: [-1.2, -7.5, -0.2] },
-  { name: 'calf_r', geo: () => new THREE.CapsuleGeometry(0.9, 3.0, 32, 32), pos: [1.2, -7.5, -0.2] },
+  { name: 'head', geo: () => new THREE.IcosahedronGeometry(1.4, 1), pos: [0, 10.5, 0], scale: [1, 1.2, 1] },
+  { name: 'neck', geo: () => new THREE.CylinderGeometry(0.6, 0.8, 1.5, 8), pos: [0, 9, 0] },
+  { name: 'chest', geo: () => new THREE.IcosahedronGeometry(2.8, 1), pos: [0, 6.5, 0.5], scale: [1.2, 1, 0.6] },
+  { name: 'upper_back', geo: () => new THREE.IcosahedronGeometry(2.6, 1), pos: [0, 6.5, -0.8], scale: [1.2, 1, 0.4] },
+  { name: 'lats', geo: () => new THREE.IcosahedronGeometry(2.4, 1), pos: [0, 4.5, -0.6], scale: [1.3, 1, 0.4] },
+  { name: 'abs', geo: () => new THREE.IcosahedronGeometry(2.2, 1), pos: [0, 3.5, 0.4], scale: [1.1, 1.2, 0.6] },
+  { name: 'pelvis', geo: () => new THREE.IcosahedronGeometry(2.4, 1), pos: [0, 1, 0], scale: [1.2, 0.8, 0.6] },
+  { name: 'shoulder_l', geo: () => new THREE.IcosahedronGeometry(1.3, 1), pos: [-3.4, 7.5, 0] },
+  { name: 'shoulder_r', geo: () => new THREE.IcosahedronGeometry(1.3, 1), pos: [3.4, 7.5, 0] },
+  { name: 'bicep_l', geo: () => new THREE.CylinderGeometry(0.9, 0.7, 3, 8), pos: [-4.0, 4.5, 0], rot: [0, 0, 0.15] },
+  { name: 'bicep_r', geo: () => new THREE.CylinderGeometry(0.9, 0.7, 3, 8), pos: [4.0, 4.5, 0], rot: [0, 0, -0.15] },
+  { name: 'forearm_l', geo: () => new THREE.CylinderGeometry(0.7, 0.5, 2.8, 8), pos: [-4.4, 1.5, 0.2], rot: [-0.1, 0, 0.1] },
+  { name: 'forearm_r', geo: () => new THREE.CylinderGeometry(0.7, 0.5, 2.8, 8), pos: [4.4, 1.5, 0.2], rot: [-0.1, 0, -0.1] },
+  { name: 'quad_l', geo: () => new THREE.CylinderGeometry(1.4, 1.0, 4.5, 8), pos: [-1.4, -2.5, 0], rot: [0, 0, -0.05] },
+  { name: 'quad_r', geo: () => new THREE.CylinderGeometry(1.4, 1.0, 4.5, 8), pos: [1.4, -2.5, 0], rot: [0, 0, 0.05] },
+  { name: 'calf_l', geo: () => new THREE.CylinderGeometry(1.0, 0.6, 4.0, 8), pos: [-1.4, -7.5, -0.2] },
+  { name: 'calf_r', geo: () => new THREE.CylinderGeometry(1.0, 0.6, 4.0, 8), pos: [1.4, -7.5, -0.2] },
 ];
 
 const MUSCLE_MAP: Record<string, string[]> = {
-  'chest': ['chest', 'pec_l', 'pec_r'],
-  'back': ['chest', 'abs'], 
+  'chest': ['chest'],
+  'back': ['upper_back', 'lats'], 
   'arms': ['bicep_l', 'bicep_r', 'forearm_l', 'forearm_r', 'shoulder_l', 'shoulder_r'],
   'shoulders': ['shoulder_l', 'shoulder_r'],
   'legs': ['quad_l', 'quad_r', 'calf_l', 'calf_r', 'pelvis'],
   'core': ['abs', 'pelvis'],
   'cardio': ['head', 'chest', 'abs', 'quad_l', 'quad_r'],
-  'full_body': ['head', 'chest', 'pec_l', 'pec_r', 'abs', 'pelvis', 'shoulder_l', 'shoulder_r', 'bicep_l', 'bicep_r', 'forearm_l', 'forearm_r', 'quad_l', 'quad_r', 'calf_l', 'calf_r']
+  'full_body': ['head', 'neck', 'chest', 'upper_back', 'lats', 'abs', 'pelvis', 'shoulder_l', 'shoulder_r', 'bicep_l', 'bicep_r', 'forearm_l', 'forearm_r', 'quad_l', 'quad_r', 'calf_l', 'calf_r']
 };
 
 export default function WorkoutHologram({ workoutPlan }: Props) {
@@ -43,6 +44,7 @@ export default function WorkoutHologram({ workoutPlan }: Props) {
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
   const groupRef = useRef<THREE.Group | null>(null);
   const reqRef = useRef<number>(0);
   const meshesRef = useRef<Record<string, THREE.Mesh>>({});
@@ -66,6 +68,63 @@ export default function WorkoutHologram({ workoutPlan }: Props) {
 
   const targetMuscle = currentDay ? getTargetMuscle(currentDay.focus) : 'full_body';
   const intensity = 0.8; // High intensity for workout days
+
+  const pointerDownPos = useRef({ x: 0, y: 0 });
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    pointerDownPos.current = { x: event.clientX, y: event.clientY };
+  };
+
+  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const dx = event.clientX - pointerDownPos.current.x;
+    const dy = event.clientY - pointerDownPos.current.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // If moved more than 5 pixels, it's a drag, not a click
+    if (distance > 5) return;
+
+    if (!mountRef.current || !cameraRef.current || !groupRef.current) return;
+    
+    const rect = mountRef.current.getBoundingClientRect();
+    const mouse = new THREE.Vector2();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, cameraRef.current);
+    const intersects = raycaster.intersectObjects(groupRef.current.children);
+
+    if (intersects.length > 0) {
+      const clickedMesh = intersects[0].object as THREE.Mesh;
+      let clickedPartName = '';
+      for (const [name, mesh] of Object.entries(meshesRef.current)) {
+        if (mesh === clickedMesh) {
+          clickedPartName = name;
+          break;
+        }
+      }
+
+      if (clickedPartName) {
+        let clickedMuscleGroup = 'full_body';
+        // Prioritize specific muscle groups over full_body
+        for (const [groupName, parts] of Object.entries(MUSCLE_MAP)) {
+          if (parts.includes(clickedPartName) && groupName !== 'full_body' && groupName !== 'cardio') {
+            clickedMuscleGroup = groupName;
+            break;
+          }
+        }
+
+        const dayIndex = workoutPlan.workout.findIndex(day => {
+            const dayFocus = getTargetMuscle(day.focus);
+            return dayFocus === clickedMuscleGroup || (clickedMuscleGroup === 'core' && dayFocus === 'back'); // Sometimes core is grouped with back
+        });
+
+        if (dayIndex !== -1) {
+          setActiveDayIndex(dayIndex);
+        }
+      }
+    }
+  };
 
   // Performance Optimization: Intersection Observer
   useEffect(() => {
@@ -98,6 +157,15 @@ export default function WorkoutHologram({ workoutPlan }: Props) {
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.enableZoom = false;
+    controls.enablePan = false;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 1.0;
+    controlsRef.current = controls;
+
     // 4. Lighting (Cinematic Studio Setup)
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
     scene.add(ambientLight);
@@ -125,16 +193,17 @@ export default function WorkoutHologram({ workoutPlan }: Props) {
     // 5. Materials (Premium Glass/Carbon Look)
     const baseMaterial = new THREE.MeshPhysicalMaterial({
       color: 0x0a1930, // Midnight blue
-      metalness: 0.7,
-      roughness: 0.15,
+      metalness: 0.8,
+      roughness: 0.2,
       clearcoat: 1.0,
       clearcoatRoughness: 0.1,
-      transmission: 0.8, // Glass-like transmission
-      thickness: 1.5, // Subsurface scattering effect
+      transmission: 0.5, // Glass-like transmission
+      thickness: 1.0, // Subsurface scattering effect
       ior: 1.5,
       transparent: true,
-      opacity: 0.95,
+      opacity: 0.9,
       side: THREE.DoubleSide,
+      flatShading: true,
     });
 
     // 6. Build Anatomy Group
@@ -195,20 +264,19 @@ export default function WorkoutHologram({ workoutPlan }: Props) {
     const animate = () => {
       time += 0.01;
       
-      // Gentle floating and rotation
+      // Gentle floating
       if (groupRef.current) {
-        groupRef.current.rotation.y = Math.sin(time * 0.5) * 0.3;
         groupRef.current.position.y = Math.sin(time) * 0.5;
+      }
+
+      if (controlsRef.current) {
+        controlsRef.current.update();
       }
 
       // Breathing effect on chest/abs
       if (meshesRef.current['chest']) {
         meshesRef.current['chest'].scale.z = 0.6 + Math.sin(time * 2) * 0.05;
-        meshesRef.current['chest'].scale.x = 1.0 + Math.sin(time * 2) * 0.02;
-      }
-      if (meshesRef.current['pec_l'] && meshesRef.current['pec_r']) {
-        meshesRef.current['pec_l'].scale.z = 0.4 + Math.sin(time * 2) * 0.03;
-        meshesRef.current['pec_r'].scale.z = 0.4 + Math.sin(time * 2) * 0.03;
+        meshesRef.current['chest'].scale.x = 1.2 + Math.sin(time * 2) * 0.02;
       }
 
       rendererRef.current!.render(sceneRef.current!, cameraRef.current!);
@@ -270,7 +338,7 @@ export default function WorkoutHologram({ workoutPlan }: Props) {
       
       {/* 3D Canvas Container */}
       <div className="relative w-full md:w-1/2 h-[300px] md:h-auto">
-        <div ref={mountRef} className="w-full h-full absolute inset-0 z-10"></div>
+        <div ref={mountRef} className="w-full h-full absolute inset-0 z-10 cursor-pointer" onPointerDown={handlePointerDown} onPointerUp={handlePointerUp}></div>
         
         {/* Overlay UI */}
         <div className="absolute bottom-6 left-6 z-20 pointer-events-none">
