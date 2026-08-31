@@ -1,10 +1,34 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
 import { ChatMessage, UserProfile, ProgressEntry, MacroPlan, DailyMealPlanDB, WorkoutDay, SupplementRecommendation } from "../types";
 import { SYSTEM_PROMPT, FOOD_DATABASE } from "../constants";
 
-// Helper to get a fresh client instance
-const getAIClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Re-defining Type enum locally so we don't depend on @google/genai in the browser
+export enum Type {
+    STRING = "STRING",
+    NUMBER = "NUMBER",
+    INTEGER = "INTEGER",
+    BOOLEAN = "BOOLEAN",
+    ARRAY = "ARRAY",
+    OBJECT = "OBJECT"
+}
+
+// Helper to call our generic backend endpoint
+const generateContent = async (payload: any) => {
+    const res = await fetch("/api/gemini", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+    });
+    
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`API Error ${res.status}: ${errText}`);
+    }
+    
+    return await res.json();
+};
 
 const retryWithBackoff = async <T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> => {
     for (let i = 0; i < maxRetries; i++) {
@@ -86,7 +110,6 @@ export const generateTrainerResponse = async (
   newMessage: string
 ): Promise<{ text: string, sources?: { title: string, uri: string }[] }> => {
   try {
-    const ai = getAIClient();
     let contextPrompt = SYSTEM_PROMPT;
     if (userProfile) {
       contextPrompt += `\n\n=== CLIENT PROFILE ===\nName: ${userProfile.name}\nAge: ${userProfile.age}\nGoal: ${userProfile.goal}\nActivity: ${userProfile.activityLevel}\nCurrent Weight: ${userProfile.weight}kg\nConditions: ${userProfile.medical_conditions || 'None'}\nIntensity: ${userProfile.goal_aggressiveness || 'normal'}`;
@@ -98,7 +121,7 @@ export const generateTrainerResponse = async (
       { role: "user", parts: [{ text: newMessage }] }
     ];
 
-    const response = await ai.models.generateContent({
+    const response = await generateContent({
       model: 'gemini-3.1-pro-preview',
       contents: contents,
       config: { 
@@ -137,7 +160,6 @@ export const analyzeBodyComposition = async (
   `;
 
   try {
-    const ai = getAIClient();
     const parts: any[] = [{ text: prompt }];
     
     // Safety check for base64
@@ -157,7 +179,7 @@ export const analyzeBodyComposition = async (
         if (backImg) parts.push({ inlineData: { mimeType: backImg.mimeType, data: backImg.data } });
     }
 
-    const response = await ai.models.generateContent({
+    const response = await generateContent({
       model: "gemini-3.1-pro-preview", 
       contents: { parts: parts },
       config: { 
@@ -264,9 +286,8 @@ export const generateDailyMealPlan = async (
 
     return retryWithBackoff(async () => {
         try {
-            const ai = getAIClient();
             console.log("Generating plan for:", dateStr);
-            const response = await ai.models.generateContent({
+            const response = await generateContent({
                 model: "gemini-3-flash-preview", 
                 contents: prompt,
                 config: { 
